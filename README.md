@@ -100,9 +100,9 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 #### Manage Template
 
-- User can create (upload) a template
-- User can update a template
-- User can delete a template
+- User can create a new template
+- User can update an existing template
+- User can delete an existing template
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -110,10 +110,10 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 ## Architecture Diagram
 
-|              | Languages / Tools / Services                                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| **Language** | [![Python][Python]][Python-url]                                                                                           |
-| **Backend**  | [![Lambda][AWSLambda]][AWSLambda-url] [![AWSSES][AWSSES]][AWSSES-url] [![AWSSQS][AWSSQS]][AWSSQS-url] [![S3][S3]][S3-url] |
+|              | Languages / Tools / Services                                                                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Language** | [![Python][Python]][Python-url]                                                                                                                                                  |
+| **Backend**  | [![Lambda][AWSLambda]][AWSLambda-url] [![AWSSES][AWSSES]][AWSSES-url] [![AWSSQS][AWSSQS]][AWSSQS-url] [![S3][S3]][S3-url] [![AWSSNS][AWSSNS]][AWSSNS-url] [![IAM][IAM]][IAM-url] |
 
 <p align="center">
   <img src="images/architecture-diagram.png" alt="Description">
@@ -300,6 +300,12 @@ List of resources found helpful during development
 [AWSSQS-url]: https://aws.amazon.com/pm/sqs/
 [AWSSES]: https://img.shields.io/badge/AWS%20SES-white?style=for-the-badge&logo=amazonsimpleemailservice&logoColor=white&color=%23DD344C
 [AWSSES-url]: https://aws.amazon.com/ses/
+[AWSSNS]: https://img.shields.io/badge/AWS%20SNS-white?style=for-the-badge&color=%23DD344C
+[AWSSNS-url]: https://aws.amazon.com/sns/
+[AWSEventBridge]: https://img.shields.io/badge/AWS%20Event%20Bridge-white?style=for-the-badge&logoColor=white&color=%23FF4F8B
+[AWSEventBridge-url]: https://aws.amazon.com/eventbridge/
+[IAM]: https://img.shields.io/badge/IAM-white?style=for-the-badge&logo=amazoniam&logoColor=white&color=%23DD344C
+[IAM-url]: https://aws.amazon.com/iam/
 [Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
 [Vue-url]: https://vuejs.org/
 [Angular.io]: https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white
