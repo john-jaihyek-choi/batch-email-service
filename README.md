@@ -131,13 +131,73 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 #### Roadmap
 
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-  - [ ] Chinese
-  - [ ] Spanish
+- [ ] Initial Setup
+  - SES Setup
+    - [ ] verify SES email domain
+    - [ ] test email sending
+    - [ ] create sample email templates
+  - IAM Role Creation (via CDK)
+    - [ ] sendBatchEmailEventLambdaRole
+    - [ ] processBatchEmailEventLambdaRole
+    - [ ] processSesTemplateLambdaRole
+    - [ ] eventBridgeExecutionRole
+- [ ] Recipient Management Template
+  - [ ] create CSV template with necessary recipient fields
+- [ ] S3 bucket creation (via CDK)
+  - [ ] send-lists bucket
+    - [ ] enable version controlling
+    - [ ] lifecycle policy (optional)
+  - [ ] templates bucket
+    - [ ] enable version controlling
+    - [ ] lifecycle policy (optional)
+- [ ] SQS Setup (via CDK)
+  - [ ] emailBatchQueue
+    - [ ] configure as FIFO
+    - [ ] configure visibility timeout
+  - [ ] failedEmailBatchQueue (DLQ)
+    - [ ] configure as standard
+- [ ] SQS Producer Lambda (via CDK)
+  - [ ] sendBatchEmailEvent
+    - [ ] enable CloudWatch logging
+    - [ ] 50 recipients / message (event)
+    - [ ] handle scheduling metadata for event bridge rule creation
+    - [ ] write test cases
+- [ ] SQS Consumer Lambda (via CDK)
+  - [ ] processBatchEmailEvent
+    - [ ] enable CloudWatch logging
+    - [ ] send batch email via SES
+    - [ ] reserved concurrency = 1
+    - [ ] write test cases
+- [ ] Monitoring
+  - Create custom metrics for SES (Optional)
+    - [ ] email delivery success rates
+    - [ ] SES bounce/complaint rates
+    - [ ] SQS message failures (via DLQ)
+    - [ ] set up CloudWatch alarms
+- [ ] Error Handling (Optional)
+  - [ ] automate handling of failed messages in DLQ (preferably via Lambda)
+- [ ] Optimization and Scaling
+  - [ ] tune SQS and Lambda batch size approriately
+  - [ ] SES production mode request and rate limit increase based on required loads per day
+- [ ] CDK Infrastructure Finalization
+  - [ ] Review the CDK stack and add all missing resources to manage via CDK deployment
+- [ ] Documentation Update
+  - [ ] setup
+  - [ ] deployment
+  - [ ] operation steps / instruction manual
+    - [ ] CSV preparation
+    - [ ] CLI/Console operation
+      - [ ] send batch email
+        - [ ] standard send
+        - [ ] schedule send
+      - [ ] template creation and management
+        - [ ] create template
+        - [ ] update template
+        - [ ] delete template
+- [ ] Frontend Update (Future Enhancements)
+  - [ ] frontend UI/UX via React
+  - [ ] REST API for frontend client to upload S3 via API call
+  - [ ] authenticated user login using Cognito
 
 See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
 
