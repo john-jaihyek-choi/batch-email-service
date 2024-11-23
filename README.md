@@ -13,7 +13,7 @@
   <img src="images/logo.png" alt="Logo" height="100">
 
   <div align="center">
-    <h3>Batch Email Service</h3>
+    <h3>Batch Email Service (Work in Progress)</h3>
     <a href="https://github.com/john-jaihyek-choi/batch-email-service"><strong>Explore the docs »</strong></a>
     <br />
     <br />
@@ -205,7 +205,7 @@ See the [open issues](https://github.com/othneildrew/Best-README-Template/issues
 
 <!-- GETTING STARTED -->
 
-## Getting Started
+<!-- ## Getting Started
 
 This is an example of how you may give instructions on setting up your project locally.
 To get a local copy up and running follow these simple example steps.
@@ -244,17 +244,17 @@ npm install npm@latest -g
 
 5. Open your default web browser and navigate to http://localhost:3000/ to see the result!
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#readme-top">back to top</a>)</p> -->
 
 <!-- USAGE EXAMPLES -->
 
-## Usage
+<!-- ## Usage
 
 Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
 
 _For more examples, please refer to the [Documentation](https://example.com)_
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#readme-top">back to top</a>)</p> -->
 
 <!-- CONTRIBUTING -->
 
