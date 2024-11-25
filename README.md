@@ -79,11 +79,11 @@ Body section for Update -->
 
 ## About The Project
 
-The Batch Email Service is a serverless functionality that utilizes AWS cloud services such as Lambda, SES, SQS, and CloudWatch where user can send out a batch, templated email, quickly and easily.
+The Batch Email Service is a serverless application that utilizes AWS cloud services such as Lambda, SES, SQS, and CloudWatch where user can send out a batch, templated email, quickly and easily.
 
-This application is created for a marketing friend of mine who had always been struggling sending out an his personal marketing email to a list of recipients. He was actively seeking a software that fufills his needs, but realized that the subcription cost for some of these 3rd party application were ridiculously expensive for such trivial functionality.
+This application is being create for a marketing friend of mine who had recently been struggling sending out an his marketing email to a list of recipients. He was actively seeking a software that fufills his needs, but realized that the subcription cost for some of these 3rd party application were ridiculously expensive for such trivial functionality.
 
-The main objective of this project is to create a service where my marketing friend can batch send emails cost effectively with less manual intervention. This service will primarily focus on functionality of batch sending email, managing email templates, manage recipients, and schedule send a batch email.
+The main objective of this project is to create a service where a user can batch send emails cost effectively with less manual intervention. This service will primarily focus on functionality of batch sending email, managing email templates, manage recipients, and schedule send a batch of email.
 
 Since the goal is to focus on the functionality, for MVP, the UI/UX will be handled via AWS console, and with CLI (cli training). Hopefully, the use of the service becomes useful to a point where I need to create a proper frontend component.
 
