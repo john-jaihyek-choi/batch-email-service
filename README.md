@@ -128,7 +128,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 #### Roadblocks
 
 - [ ] AWS account, by default, is enabled with SES sandbox mode which allows 200 emails per day limit. Admin must open a ticket with AWS to enable production, then to update qutoa limit for number of emails per day send limit.
-- [ ] [Email Deliverability Issue](#EmailDeliverabilityIssue)
+- [ ] [Email Deliverability Issue](#email-deliverability-issue)
 
 #### Roadmap
 
@@ -321,6 +321,9 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
   - Testing:
     - Verified the SPF and DKIM records using [MXToolbox](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email).
     - Sent test emails to confirm inbox placement.
+- References:
+  - [Amazon SES – Authenticating Your Emails with SPF and DKIM](https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-spf.html)
+  - [Amazon SES – Troubleshooting Email Deliverability](https://docs.aws.amazon.com/ses/latest/dg/Welcome.html)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
