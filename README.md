@@ -127,14 +127,16 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 #### Roadblocks
 
-- AWS account, by default, is enabled with SES sandbox mode which allows 200 emails per day limit. Admin must open a ticket with AWS to enable production, then to update qutoa limit for number of emails per day send limit.
+- [ ] AWS account, by default, is enabled with SES sandbox mode which allows 200 emails per day limit. Admin must open a ticket with AWS to enable production, then to update qutoa limit for number of emails per day send limit.
+- [ ] [Email Deliverability Issue](#EmailDeliverabilityIssue)
 
 #### Roadmap
 
 - [ ] Initial Setup
   - SES Setup
-    - [ ] verify SES email domain
-    - [ ] test email sending
+    - [x] verify SES email domain
+    - [x] test email sending
+      - [x] configure DKIM, DNS, and SPF properly to ensure the email hits recipient email's inbox (not spam)
     - [ ] create sample email templates
   - IAM Role Creation (via CDK)
     - [ ] sendBatchEmailEventLambdaRole
@@ -296,6 +298,32 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<!-- DEVELOPMENT NOTE -->
+
+## Development Note
+
+#### Email Deliverability Issue:
+
+- Issue:
+  - Emails sent via Amazon SES were landing in the spam (junk) folder of recipients instead of their inbox.
+- Root cause:
+  - The domain was missing proper email authentication records (SPF, DKIM, and DMARC).
+  - Without these records, recipient mail servers flagged the emails as unauthenticated or suspicious, reducing deliverability.
+- Resolution:
+  - SPF Configuration:
+    - Added a TXT record to the domain’s DNS settings
+      ```sh
+      v=spf1 include:amazonses.com ~all
+      ```
+      This allows Amazon SES to send authenticated emails on behalf of the domain.
+  - DKIM Configuration:
+    - Enabled DKIM in Amazon SES properly.
+  - Testing:
+    - Verified the SPF and DKIM records using [MXToolbox](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email).
+    - Sent test emails to confirm inbox placement.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
 <!-- ACKNOWLEDGMENTS -->
 
 ## Acknowledgments
@@ -303,8 +331,10 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
 List of resources found helpful during development
 
 - [Best practices for sending email using Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/best-practices.html)
+- [Sending test emails in Amazon SES with the simulator](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email)
+- [SPF Record Lookup Tool](https://mxtoolbox.com/SuperTool.aspx)
 
-<!-- <p align="right">(<a href="#readme-top">back to top</a>)</p>
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- BADGES -->
 
