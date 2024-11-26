@@ -155,6 +155,8 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [ ] templates bucket
     - [ ] enable version controlling
     - [ ] lifecycle policy (optional)
+  - [ ] asset bucket
+    - [ ] add asset images for templates and etc
 - [ ] SQS Setup (via CDK)
   - [ ] emailBatchQueue
     - [ ] configure as FIFO
@@ -173,6 +175,11 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [ ] send batch email via SES
     - [ ] reserved concurrency = 1
     - [ ] write test cases
+- [ ] Template processor Lambda (via CDK)
+  - [ ] processSesTemplate
+    - [ ] s3 event trigger for PUT and DELETE
+    - [ ] html minifier and stringify
+    - [ ] SES template
 - [ ] Monitoring
   - Create custom metrics for SES (Optional)
     - [ ] email delivery success rates
