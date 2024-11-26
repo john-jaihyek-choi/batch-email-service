@@ -141,15 +141,15 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [x] test email sending
       - [x] configure DKIM, DNS, and SPF properly to ensure the email hits recipient email's inbox (not spam)
     - [x] create sample email templates
-- [ ] S3 bucket resource provisioning
-  - [ ] jc-batch-email-services-bucket
-    - [ ] enable version controlling
-    - [ ] life-cycle policy (Optional)
-    - [ ] event trigger filter
-      - [ ] send-lists/ prefix
-      - [ ] templates/ prefix
-    - [ ] asset/ prefix
-      - [ ] storage for resources in assets/
+- [x] S3 bucket resource provisioning
+  - [x] jc-batch-email-services-bucket
+    - [x] enable version controlling
+    - [x] life-cycle policy (Optional)
+    - [x] event trigger filter
+      - [x] send-lists/ prefix
+      - [x] templates/ prefix
+    - [x] asset/ prefix
+      - [x] storage for resources in assets/
 - [ ] SQS resource provisioning
   - [ ] failedEmailBatchQueue (DLQ)
     - [ ] max retry configuration (maxReceiveCount)
