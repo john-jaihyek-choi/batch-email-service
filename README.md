@@ -150,15 +150,14 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
       - [x] templates/ prefix
     - [x] asset/ prefix
       - [x] storage for resources in assets/
-- [ ] SQS resource provisioning
-  - [ ] failedEmailBatchQueue (DLQ)
-    - [ ] max retry configuration (maxReceiveCount)
-  - [ ] emailBatchQueue
-    - [ ] configure visibility timeout (default 30sec)
+- [x] SQS resource provisioning
+  - [x] failedEmailBatchQueue (DLQ)
+    - [x] max retry configuration (maxReceiveCount)
+  - [x] emailBatchQueue
+    - [x] configure visibility timeout (default 30sec)
 - [ ] SQS producer lambda (sendBatchEmailEvent)
   - [ ] Logic implementation
     - [ ] 50 recipients / message (event)
-    - [ ] handle scheduling metadata for event bridge rule creation
   - [ ] Test cases
   - [ ] CDK Resource provisioning
 - [ ] SQS consumer lambda (processBatchEmailEvent)
@@ -167,11 +166,16 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [ ] Test cases
   - [ ] CDK Resource provisioning
     - [ ] reserved concurrency
+- [ ] SQS producer lambda (scheduleBatchEmailEvent)
+  - [ ] Logic implementation
+    - [ ] handle scheduling metadata for event bridge rule creation
+  - [ ] Test cases
+  - [ ] CDK Resource provisioning
 - [ ] Template processor Lambda (processSesTemplate)
   - [ ] Logic implementation
     - [ ] s3 event for PUT and DELETE
     - [ ] html minifier and stringify
-    - [ ] SES template
+    - [ ] create/upload or delete from SES template
   - [ ] Test cases
   - [ ] CDK Resource provisioning
 - [ ] Recipient Management Template
