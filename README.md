@@ -49,7 +49,7 @@ Body section for Update -->
     <li>
       <a href="#architecture-diagram">Architecture Diagram</a>
     </li>
-      <li><a href="#roadmap">Roadmap</a></li>
+      <li><a href="#roadmap">Roadblocks and Roadmap</a></li>
     <li>
       <a href="#getting-started">Getting Started</a>
       <ul>
@@ -133,12 +133,14 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 #### Roadmap
 
+##### MVP
+
 - [ ] Initial Setup
   - SES Setup
     - [x] verify SES email domain
     - [x] test email sending
       - [x] configure DKIM, DNS, and SPF properly to ensure the email hits recipient email's inbox (not spam)
-    - [ ] create sample email templates
+    - [x] create sample email templates
   - IAM Role Creation (via CDK)
     - [ ] sendBatchEmailEventLambdaRole
     - [ ] processBatchEmailEventLambdaRole
@@ -177,8 +179,6 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [ ] SES bounce/complaint rates
     - [ ] SQS message failures (via DLQ)
     - [ ] set up CloudWatch alarms
-- [ ] Error Handling (Optional)
-  - [ ] automate handling of failed messages in DLQ (preferably via Lambda)
 - [ ] Optimization and Scaling
   - [ ] tune SQS and Lambda batch size approriately
   - [ ] SES production mode request and rate limit increase based on required loads per day
@@ -197,7 +197,12 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
         - [ ] create template
         - [ ] update template
         - [ ] delete template
-- [ ] Frontend Update (Future Enhancements)
+
+##### Future Enhancement
+
+- [ ] Error Handling
+  - [ ] automate handling of failed messages in DLQ (preferably via Lambda)
+- [ ] Frontend Update
   - [ ] frontend UI/UX via React
   - [ ] REST API for frontend client to upload S3 via API call
   - [ ] authenticated user login using Cognito
@@ -320,7 +325,7 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
   - DKIM Configuration:
     - Enabled DKIM in Amazon SES properly.
   - Testing:
-    - Verified the SPF and DKIM records using [MXToolbox](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email).
+    - Verified the SPF and DKIM records using [MXToolbox](https://mxtoolbox.com/dmarc.aspx).
     - Sent test emails to confirm inbox placement.
 - References:
   - [Amazon SES – Authenticating Your Emails with SPF and DKIM](https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-spf.html)
@@ -336,7 +341,7 @@ List of resources found helpful during development
 
 - [Best practices for sending email using Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/best-practices.html)
 - [Sending test emails in Amazon SES with the simulator](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email)
-- [SPF Record Lookup Tool](https://mxtoolbox.com/SuperTool.aspx)
+- [DMARC Check Tool](https://mxtoolbox.com/dmarc.aspx)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
