@@ -141,45 +141,44 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [x] test email sending
       - [x] configure DKIM, DNS, and SPF properly to ensure the email hits recipient email's inbox (not spam)
     - [x] create sample email templates
-  - IAM Role Creation (via CDK)
-    - [ ] sendBatchEmailEventLambdaRole
-    - [ ] processBatchEmailEventLambdaRole
-    - [ ] processSesTemplateLambdaRole
-    - [ ] eventBridgeExecutionRole
-- [ ] Recipient Management Template
-  - [ ] create CSV template with necessary recipient fields
-- [ ] S3 bucket creation (via CDK)
-  - [ ] send-lists bucket
+- [ ] S3 bucket resource provisioning
+  - [ ] jc-batch-email-services-bucket
     - [ ] enable version controlling
-    - [ ] lifecycle policy (optional)
-  - [ ] templates bucket
-    - [ ] enable version controlling
-    - [ ] lifecycle policy (optional)
-  - [ ] asset bucket
-    - [ ] add asset images for templates and etc
-- [ ] SQS Setup (via CDK)
-  - [ ] emailBatchQueue
-    - [ ] configure as FIFO
-    - [ ] configure visibility timeout
+    - [ ] life-cycle policy (Optional)
+    - [ ] event trigger filter
+      - [ ] send-lists/ prefix
+      - [ ] templates/ prefix
+    - [ ] asset/ prefix
+      - [ ] storage for resources in assets/
+- [ ] SQS resource provisioning
   - [ ] failedEmailBatchQueue (DLQ)
-    - [ ] configure as standard
-- [ ] SQS Producer Lambda (via CDK)
-  - [ ] sendBatchEmailEvent
-    - [ ] enable CloudWatch logging
+    - [ ] max retry configuration (maxReceiveCount)
+  - [ ] emailBatchQueue
+    - [ ] configure visibility timeout (default 30sec)
+- [ ] SQS producer lambda (sendBatchEmailEvent)
+  - [ ] Logic implementation
     - [ ] 50 recipients / message (event)
     - [ ] handle scheduling metadata for event bridge rule creation
-    - [ ] write test cases
-- [ ] SQS Consumer Lambda (via CDK)
-  - [ ] processBatchEmailEvent
-    - [ ] enable CloudWatch logging
+  - [ ] Test cases
+  - [ ] CDK Resource provisioning
+- [ ] SQS consumer lambda (processBatchEmailEvent)
+  - [ ] Logic implementation
     - [ ] send batch email via SES
-    - [ ] reserved concurrency = 1
-    - [ ] write test cases
-- [ ] Template processor Lambda (via CDK)
-  - [ ] processSesTemplate
-    - [ ] s3 event trigger for PUT and DELETE
+  - [ ] Test cases
+  - [ ] CDK Resource provisioning
+    - [ ] reserved concurrency
+- [ ] Template processor Lambda (processSesTemplate)
+  - [ ] Logic implementation
+    - [ ] s3 event for PUT and DELETE
     - [ ] html minifier and stringify
     - [ ] SES template
+  - [ ] Test cases
+  - [ ] CDK Resource provisioning
+- [ ] Recipient Management Template
+  - [ ] create CSV template with necessary recipient fields
+- [ ] End to end testing
+  - [ ] send batch emails
+  - [ ] upload/delete templates
 - [ ] Monitoring
   - Create custom metrics for SES (Optional)
     - [ ] email delivery success rates
@@ -187,7 +186,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [ ] SQS message failures (via DLQ)
     - [ ] set up CloudWatch alarms
 - [ ] Optimization and Scaling
-  - [ ] tune SQS and Lambda batch size approriately
+  - [ ] tune SQS and Lambda batch size appropriately
   - [ ] SES production mode request and rate limit increase based on required loads per day
 - [ ] CDK Infrastructure Finalization
   - [ ] Review the CDK stack and add all missing resources to manage via CDK deployment
