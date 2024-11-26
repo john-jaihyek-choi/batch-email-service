@@ -12,7 +12,7 @@ export class CdkStack extends cdk.Stack {
     super(scope, id, props);
 
     const app = new cdk.App();
-    const stack = new cdk.Stack(app, "MainStack");
+    const stack = new cdk.Stack(app, "BatchEmailServiceMainStack");
 
     // S3 Buckets:
     const s3BucketLifeCycleRule: s3.LifecycleRule = {
@@ -30,6 +30,13 @@ export class CdkStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
+
+    // Deploy initial asset files to S3 bucket
+    new s3d.BucketDeployment(stack, "DeployInitialAssets", {
+      destinationBucket: jcBatchEmailServiceBucket,
+      sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
+      exclude: [".DS_Store"],
+    });
 
     // Lambdas:
     const sendBatchEmailEvent: lambda.Function = new lambda.Function(
@@ -96,13 +103,6 @@ export class CdkStack extends cdk.Stack {
         config.getDestination(),
         config.filters
       );
-    });
-
-    // Deploy initial asset files to S3 bucket
-    new s3d.BucketDeployment(stack, "DeployInitialAssets", {
-      destinationBucket: jcBatchEmailServiceBucket,
-      sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
-      destinationKeyPrefix: "assets/",
     });
   }
 }
