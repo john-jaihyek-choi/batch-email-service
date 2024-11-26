@@ -5,7 +5,22 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as s3d from "aws-cdk-lib/aws-s3-deployment";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as iam from "aws-cdk-lib/aws-iam";
 import * as path from "path";
+
+type S3EventNotificationDestinations =
+  | s3n.LambdaDestination
+  | s3n.SnsDestination
+  | s3n.SqsDestination;
+
+interface EventNotificationConfiguration {
+  eventType: s3.EventType;
+  getDestination: () => S3EventNotificationDestinations;
+  filters: {
+    prefix?: string;
+    suffix?: string;
+  };
+}
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -13,6 +28,28 @@ export class CdkStack extends cdk.Stack {
 
     const app = new cdk.App();
     const stack = new cdk.Stack(app, "BatchEmailServiceMainStack");
+
+    const awsRegion = stack.region;
+    const accountId = stack.account;
+
+    // SQS Queues:
+    const failedEmailBatchQueue: sqs.Queue = new sqs.Queue(
+      stack,
+      "failedEmailBatchQueue",
+      {
+        queueName: "failedEmailBatchQueue",
+        retentionPeriod: cdk.Duration.days(14),
+      }
+    );
+
+    const emailBatchQueue: sqs.Queue = new sqs.Queue(stack, "emailBatchQueue", {
+      queueName: "emailBatchQueue",
+      deadLetterQueue: {
+        queue: failedEmailBatchQueue,
+        maxReceiveCount: 3,
+      },
+      visibilityTimeout: cdk.Duration.minutes(1),
+    });
 
     // S3 Buckets:
     const s3BucketLifeCycleRule: s3.LifecycleRule = {
@@ -35,7 +72,7 @@ export class CdkStack extends cdk.Stack {
     new s3d.BucketDeployment(stack, "DeployInitialAssets", {
       destinationBucket: jcBatchEmailServiceBucket,
       sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
-      exclude: [".DS_Store"],
+      exclude: ["**/.DS_Store"],
     });
 
     // Lambdas:
@@ -63,25 +100,87 @@ export class CdkStack extends cdk.Stack {
         code: lambda.Code.fromAsset(
           path.join(
             __dirname,
+            "../lambdas/python/functions/process_batch_email_event"
+          )
+        ),
+      }
+    );
+
+    const scheduleBatchEmail: lambda.Function = new lambda.Function(
+      stack,
+      "scheduleBatchEmail",
+      {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: "lambda.handler",
+        code: lambda.Code.fromAsset(
+          path.join(
+            __dirname,
+            "../lambdas/python/functions/schedule_batch_email"
+          )
+        ),
+      }
+    );
+    scheduleBatchEmail.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "scheduler:CreateSchedule",
+          "scheduler:PutTargets",
+          "scheduler:DeleteSchedule",
+          "scheduler:TagResource",
+        ],
+        resources: [`arn:aws:scheduler:${awsRegion}:${accountId}:schedule/*`],
+      })
+    );
+
+    const processSesTemplate: lambda.Function = new lambda.Function(
+      stack,
+      "processSesTemplate",
+      {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: "lambda.handler",
+        code: lambda.Code.fromAsset(
+          path.join(
+            __dirname,
             "../lambdas/python/functions/process_ses_template"
           )
         ),
       }
     );
 
+    // Grant SQS Send and Consume Permissions:
+    failedEmailBatchQueue.grantSendMessages(processBatchEmailEvent);
+    emailBatchQueue.grantSendMessages(sendBatchEmailEvent);
+    emailBatchQueue.grantConsumeMessages(processBatchEmailEvent);
+
     // S3 Event Notification Configuration
-    const eventNotificationConfiguration = [
+    const eventNotificationConfigurations: EventNotificationConfiguration[] = [
       {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(sendBatchEmailEvent),
         filters: {
-          prefix: "send-list/*",
+          prefix: "send-list/",
           suffix: ".csv",
         },
       },
       {
         eventType: s3.EventType.OBJECT_CREATED,
-        getDestination: () => new s3n.LambdaDestination(processBatchEmailEvent),
+        getDestination: () => new s3n.LambdaDestination(scheduleBatchEmail),
+        filters: {
+          prefix: "send-list/scheduled/*",
+          suffix: ".csv",
+        },
+      },
+      {
+        eventType: s3.EventType.OBJECT_REMOVED,
+        getDestination: () => new s3n.LambdaDestination(scheduleBatchEmail),
+        filters: {
+          prefix: "send-list/scheduled/*",
+          suffix: ".csv",
+        },
+      },
+      {
+        eventType: s3.EventType.OBJECT_CREATED,
+        getDestination: () => new s3n.LambdaDestination(processSesTemplate),
         filters: {
           prefix: "templates/*",
           suffix: ".html",
@@ -89,7 +188,7 @@ export class CdkStack extends cdk.Stack {
       },
       {
         eventType: s3.EventType.OBJECT_REMOVED,
-        getDestination: () => new s3n.LambdaDestination(processBatchEmailEvent),
+        getDestination: () => new s3n.LambdaDestination(processSesTemplate),
         filters: {
           prefix: "templates/*",
           suffix: ".html",
@@ -97,7 +196,7 @@ export class CdkStack extends cdk.Stack {
       },
     ];
 
-    eventNotificationConfiguration.forEach((config) => {
+    eventNotificationConfigurations.forEach((config) => {
       jcBatchEmailServiceBucket.addEventNotification(
         config.eventType,
         config.getDestination(),
