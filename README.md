@@ -165,6 +165,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [ ] send batch email via SES
   - [ ] Test cases
   - [ ] CDK Resource provisioning
+    - [ ] add event source as emailBatchQueue
     - [ ] reserved concurrency
 - [ ] SQS producer lambda (scheduleBatchEmailEvent)
   - [ ] Logic implementation
