@@ -6,6 +6,7 @@ import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as s3d from "aws-cdk-lib/aws-s3-deployment";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as eventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
 
 type S3EventNotificationDestinations =
@@ -81,7 +82,7 @@ export class CdkStack extends cdk.Stack {
       "sendBatchEmailEvent",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "lambda.handler",
+        handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(
             __dirname,
@@ -96,7 +97,7 @@ export class CdkStack extends cdk.Stack {
       "processBatchEmailEvent",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "lambda.handler",
+        handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(
             __dirname,
@@ -105,13 +106,18 @@ export class CdkStack extends cdk.Stack {
         ),
       }
     );
+    processBatchEmailEvent.addEventSource(
+      new eventSources.SqsEventSource(emailBatchQueue, {
+        batchSize: 1,
+      })
+    );
 
     const scheduleBatchEmail: lambda.Function = new lambda.Function(
       stack,
       "scheduleBatchEmail",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "lambda.handler",
+        handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(
             __dirname,
@@ -137,7 +143,7 @@ export class CdkStack extends cdk.Stack {
       "processSesTemplate",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "lambda.handler",
+        handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(
             __dirname,
@@ -158,7 +164,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(sendBatchEmailEvent),
         filters: {
-          prefix: "send-list/",
+          prefix: "batch/send/*",
           suffix: ".csv",
         },
       },
@@ -166,7 +172,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(scheduleBatchEmail),
         filters: {
-          prefix: "send-list/scheduled/*",
+          prefix: "batch/scheduled/*",
           suffix: ".csv",
         },
       },
@@ -174,7 +180,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_REMOVED,
         getDestination: () => new s3n.LambdaDestination(scheduleBatchEmail),
         filters: {
-          prefix: "send-list/scheduled/*",
+          prefix: "batch/scheduled/*",
           suffix: ".csv",
         },
       },
