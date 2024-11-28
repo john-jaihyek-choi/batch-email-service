@@ -156,28 +156,30 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [x] emailBatchQueue
     - [x] configure visibility timeout (default 30sec)
 - [ ] SQS producer lambda (sendBatchEmailEvent)
+  - [ ] Test cases
   - [ ] Logic implementation
     - [ ] 50 recipients / message (event)
-  - [ ] Test cases
   - [ ] CDK Resource provisioning
 - [ ] SQS consumer lambda (processBatchEmailEvent)
+  - [ ] Test cases
   - [ ] Logic implementation
     - [ ] send batch email via SES
-  - [ ] Test cases
+    - [ ] archive s3 object upon successful processing
   - [ ] CDK Resource provisioning
     - [ ] add event source as emailBatchQueue
     - [ ] reserved concurrency
-- [ ] SQS producer lambda (scheduleBatchEmailEvent)
-  - [ ] Logic implementation
-    - [ ] handle scheduling metadata for event bridge rule creation
+- [ ] Schedule Email Batch Lambda (scheduleBatchEmailEvent)
   - [ ] Test cases
+  - [ ] Logic implementation
+    - [ ] create event bridge schedule with sendBatchEmailEvent as a target
+    - [ ] Event bridge InputTransformer to transform event payload for sendBatchEmailEvent
   - [ ] CDK Resource provisioning
 - [ ] Template processor Lambda (processSesTemplate)
+  - [ ] Test cases
   - [ ] Logic implementation
     - [ ] s3 event for PUT and DELETE
     - [ ] html minifier and stringify
     - [ ] create/upload or delete from SES template
-  - [ ] Test cases
   - [ ] CDK Resource provisioning
 - [ ] Recipient Management Template
   - [ ] create CSV template with necessary recipient fields
@@ -319,6 +321,81 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
 
 ## Development Note
 
+#### Cost Analysis:
+
+- Main point of discussion:
+  - 1 sqs message per recipient vs 1 sqs message per N recipient (Approach 1)
+    - 1 message per recipient is the quickest and the most simple implementation, but will result in much more unique messages and unique lambda execution
+      - Higher number of messages being enqued to SQS and higher number of unique lambda execution
+    - 1 sqs message per N recipient is more implementation, but will result in less unique messages to queue and unique lambda executions (Approach 2)
+      - Lower number of messages enqued to SQS and lower number of unique lambda execution
+- Comparison:
+  - AWS Pricing:
+    - SQS pricing:
+      - $0.40 per million message / $0.0000004 per message
+    - Lambda pricing:
+      - Request Charge:
+        - $0.20 per million invocation / $0.0000002 per invocation
+      - Compute Duration Charge:
+        - $0.0000166667 for every GB-second (1000ms)
+      - Ephemeral Storage Charge:
+        - Free for 512GB
+  - Assumptions:
+    - 10,000,000 emails to recipients per month
+    - No free tier discounts applied
+    - Lambda consumes 1 batch at a time
+    - Approach 1
+      - Recipient per message = 1
+      - Average lambda execution time = ~1s
+      - Lambda Memory = 128MB
+      - 10,000,000 unique requests
+    - Approach 2
+      - Recipients per message = 100
+      - Average lambda execution time = ~95s (considering time saving on init time, etc)
+      - Lambda Memory = 128MB
+      - 100,000 unique requests
+  - Estimation:
+    - Approach 1:
+      - Lambda Cost:
+        - Compute Duration Charge:
+          - 0.128GB (128MB) _ 1 (seconds) _ 10,000,000 (invocations) = 1,280,000 GB-second
+          - 1,280,000 GB-s \* 0.0000166667 = ~$21.34/month
+        - Request Charge:
+          - 10,000,000 (invocations) \* $0.0000002 ($0.20/million) = ~$2/month
+        - Ephemeral Storage Charge:
+          - Free up to 512MB
+        - Total Lambda Cost:
+          - $21.34 (compute) + $2 (Request) + 0 (ephemeral) = ~$24.34/month
+      - SQS Cost:
+        - 10,000,000 messages \* $0.0000004
+        - monthly cost estimate = $4/month
+      - Total Monthly Cost:
+        - $21.34 (Lambda) + $4 (SQS) = ~$25.34/month
+    - Approach 2:
+      - Lambda Cost:
+        - Compute Duration Charge:
+          - 0.128GB (128MB) _ 95 (seconds) _ 100,000 (invocations) = 1,216,000 GB-second
+          - 1,216,000 GB-s \* 0.0000166667 = ~$20.27/month
+        - Request Charge:
+          - 100,000 (invocations) \* $0.0000002 ($0.20/million) = $0.02/month
+        - Ephemeral Storage Charge:
+          - Free up to 512MB
+        - Total Lambda Cost:
+          - $20.27 (compute) + $0.02 (Request) + 0 (ephemeral) = $20.29
+      - SQS Cost:
+        - 100,000 messages \* $0.0000004
+        - monthly cost estimate = $0.04/month
+      - Total Monthly Cost:
+        - $20.29 (Lambda) + $0.04 (SQS) = ~$20.34/month
+  - Conclusion:
+    - Based on the estimation, there's about 20% potential saving with Approach 2
+    - Design Path:
+      - sendBatchEmailEvent processes R number of recipients (ie 100) per message and sends M number of messages (max = 10) in batch
+        - Allow M and R to be adjustable via environment variable
+      - processBatchEmailEvent (with batch_size = 1) processes each message (containing R recipients) and makes total of R many SendTemplatedEmail API call in a single invocation
+        - Fix batch_size to 1 for less complexity and to prevent longer lambda execution
+        - Lambda, by default, has 1000 concurrency which should be sufficient for the use of this application
+
 #### Email Deliverability Issue:
 
 - Issue:
@@ -353,6 +430,8 @@ List of resources found helpful during development
 - [Best practices for sending email using Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/best-practices.html)
 - [Sending test emails in Amazon SES with the simulator](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email)
 - [DMARC Check Tool](https://mxtoolbox.com/dmarc.aspx)
+- [Mocking AWS for testing](https://docs.getmoto.org/en/latest/docs/getting_started.html)
+- [AWS CDK API Documentation](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-construct-library.html)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
