@@ -177,14 +177,6 @@ export class CdkStack extends cdk.Stack {
         },
       },
       {
-        eventType: s3.EventType.OBJECT_REMOVED,
-        getDestination: () => new s3n.LambdaDestination(scheduleBatchEmail),
-        filters: {
-          prefix: "batch/scheduled/*",
-          suffix: ".csv",
-        },
-      },
-      {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(processSesTemplate),
         filters: {
