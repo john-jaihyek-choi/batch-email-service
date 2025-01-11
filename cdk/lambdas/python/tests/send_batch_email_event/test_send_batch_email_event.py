@@ -7,7 +7,6 @@ import os
 from http import HTTPStatus
 from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
-import logging
 
 # Test cases:
     # Valid event param
@@ -35,7 +34,7 @@ class TestSendBatchEmailEvent:
         response = lambda_handler(empty_event, {})
 
         assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
-        assert response["Message"] == "Event parameter not found - S3 event is expected."
+        assert response["Message"] == "Event missing - Valid S3 event is required."
 
     def test_invalid_s3_event_name(self, sqs: SQSClient, invalid_event_name: S3Event) -> None:
         queue = sqs.create_queue(QueueName="test-queue1")
@@ -48,9 +47,7 @@ class TestSendBatchEmailEvent:
         assert response["MessageId"]
 
 
-
-
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="class")
 def aws_credentials():
     """Mocked AWS Credentials for moto."""
     os.environ["TARGET_QUEUE_URL"] = ""
@@ -61,12 +58,12 @@ def aws_credentials():
     os.environ["AWS_SESSION_TOKEN"] = ""
     os.environ["AWS_DEFAULT_REGION"] = "us-east-2"
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="class")
 def sqs(aws_credentials):
     with mock_aws():
         yield boto3.client("sqs")
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def valid_event() -> S3Event:
     return {
         "Records": [
@@ -107,11 +104,11 @@ def valid_event() -> S3Event:
         ]
     }
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def empty_event() -> S3Event:
     return {}
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def invalid_event_name() -> S3Event:
     return {
         "Records": [
