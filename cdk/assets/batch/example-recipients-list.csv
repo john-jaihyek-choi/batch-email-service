@@ -1,2 +1,2 @@
-first_name,last_name,phone_number,company
-John,Doe,1234567890,name_of_company
+send_to,first_name,last_name,send_from,email_template,contact
+abc@email.com,John,Doe,xyz@email.com,template1,1234567890
