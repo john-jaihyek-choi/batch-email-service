@@ -2,7 +2,7 @@ import json
 import os
 import logging
 import boto3
-from typing import Dict, Any, List
+from typing import Dict, Any
 from http import HTTPStatus
 from dotenv import load_dotenv
 
@@ -13,7 +13,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-sqs = boto3.client("sqs")
+sqs = boto3.client("sqs", os.getenv("AWS_DEFAULT_REGION", "us-east-2"))
 
 def lambda_handler(event, context):
     # Example S3 Put Event
