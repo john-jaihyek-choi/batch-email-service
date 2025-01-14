@@ -1,12 +1,18 @@
-from mypy_boto3_sqs.client import SQSClient
+from mypy_boto3_sqs.client import SQSClient, ListQueuesResultTypeDef
 import pytest
-from typing import Dict, Any
+from typing import Any, Generator
 from moto import mock_aws
 import boto3
 import os
 from http import HTTPStatus
 from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
+import logging
+
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL')
+)
+logger = logging.getLogger(__name__)
 
 # Test cases:
     # Valid event param
@@ -17,29 +23,20 @@ from aws_lambda_powertools.utilities.data_classes import S3Event
 
 @mock_aws
 class TestSendBatchEmailEvent:
-    def test_valid_event(self, sqs: SQSClient, valid_event: S3Event) -> None:
-        queue = sqs.create_queue(QueueName="test-queue1")
-        os.environ["TARGET_QUEUE_URL"] = queue["QueueUrl"]
-
+    def test_valid_event(self, create_mock_queue, valid_event: S3Event) -> None:
         response = lambda_handler(valid_event, {})
 
         assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
         assert "MessageId" in response
         assert response["MessageId"]
 
-    def test_empty_event(self, sqs: SQSClient, empty_event: S3Event) -> None:
-        queue = sqs.create_queue(QueueName="test-queue1")
-        os.environ["TARGET_QUEUE_URL"] = queue["QueueUrl"]
-
+    def test_empty_event(self, create_mock_queue, empty_event: S3Event) -> None:
         response = lambda_handler(empty_event, {})
 
         assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
         assert response["Message"] == "Event missing - Valid S3 event is required."
 
-    def test_invalid_s3_event_name(self, sqs: SQSClient, invalid_event_name: S3Event) -> None:
-        queue = sqs.create_queue(QueueName="test-queue1")
-        os.environ["TARGET_QUEUE_URL"] = queue["QueueUrl"]
-
+    def test_invalid_s3_event_name(self, create_mock_queue, invalid_event_name: S3Event) -> None:
         response = lambda_handler(invalid_event_name, {})
 
         assert response["ResponseMetadata"]["HTTPStatusCode"] == 200
@@ -47,21 +44,18 @@ class TestSendBatchEmailEvent:
         assert response["MessageId"]
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="module")
 def aws_credentials():
     """Mocked AWS Credentials for moto."""
-    os.environ["TARGET_QUEUE_URL"] = ""
-    os.environ["LOG_LEVEL"] = "INFO"
-    os.environ["AWS_ACCESS_KEY_ID"] = ""
-    os.environ["AWS_SECRET_ACCESS_KEY"] = ""
-    os.environ["AWS_SECURITY_TOKEN"] = ""
-    os.environ["AWS_SESSION_TOKEN"] = ""
     os.environ["AWS_DEFAULT_REGION"] = "us-east-2"
 
-@pytest.fixture(scope="class")
-def sqs(aws_credentials):
+@pytest.fixture(scope="module")
+def create_mock_queue(aws_credentials):
     with mock_aws():
-        yield boto3.client("sqs")
+        sqs: SQSClient = boto3.client("sqs", os.getenv("AWS_DEFAULT_REGION"))
+        queue = sqs.create_queue(QueueName="test-queue1")
+        os.environ["TARGET_QUEUE_URL"] = queue["QueueUrl"]
+        yield
 
 @pytest.fixture(scope="class")
 def valid_event() -> S3Event:
