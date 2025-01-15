@@ -35,6 +35,10 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any]):
 
     logger.info(target_objects)
 
+    # open csv target and organize by N batch
+    for target in target_objects:
+        process_targets(target)
+
     return {
         "ResponseMetadata": {
             "HTTPStatusCode": 200
@@ -61,3 +65,34 @@ def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
             })
 
     return res
+
+def process_targets(s3_target: Dict[str, str]) -> None:
+    try:
+        recipients_per_message = os.getenv("RECIPIENTS_PER_MESSAGE")
+
+        bucket_name, prefix, key, principal_id = s3_target["bucket_name"], s3_target["prefix"], s3_target["key"], s3_target["principal_id"]
+        timestamp = datetime.now(timezone.utc)
+
+        s3_object = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{key}")
+        wrapper = io.TextIOWrapper(s3_object["Body"], encoding="utf-8")
+
+        recipient_batch, batch_number = [], 0
+        for row in csv.DictReader(wrapper):
+            recipient_batch.append(row)
+
+            if len(recipient_batch) == recipients_per_message:
+                batch_number += 1
+
+                send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
+
+                recipient_batch = []
+
+        if recipient_batch:
+            batch_number += 1
+            send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
+
+        
+
+    except Exception as e:
+        logger.error(f"Unexpected error had occurred: {e}")
+        raise
