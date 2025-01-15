@@ -96,3 +96,36 @@ def process_targets(s3_target: Dict[str, str]) -> None:
     except Exception as e:
         logger.error(f"Unexpected error had occurred: {e}")
         raise
+
+def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetime, batch_number: int, principal_id: str, recipient_batch: List[Dict[str, Any]]):
+    try:
+        queue_name, aws_account_id, aws_region = os.getenv("EMAIL_BATCH_QUEUE_NAME"), os.getenv("AWS_ACCOUNT_ID"), os.getenv("AWS_DEFAULT_REGION")
+
+        message = {
+            "batchId": f"{bucket_name}/{prefix}/{key}-{str(timestamp)}-{batch_number}",  
+            "recipients": recipient_batch,
+            "metadata": {                          
+                "uploadedBy": principal_id,      
+                "timestamp": str(timestamp)
+            }
+        }
+
+        response = sqs.send_message(
+            QueueUrl=f"https://sqs.{aws_region}.amazonaws.com/{aws_account_id}/{queue_name}",
+            MessageBody=json.dumps(message)
+        )
+
+        logger.info(response)
+
+        messages = sqs.receive_message(
+            QueueUrl=f"https://sqs.{aws_region}.amazonaws.com/{aws_account_id}/{queue_name}",
+            MaxNumberOfMessages=10
+        )
+
+        logger.info(messages)
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Unexpected error had occurred: {e}")
+        raise
