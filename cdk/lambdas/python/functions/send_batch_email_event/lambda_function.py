@@ -91,8 +91,6 @@ def process_targets(s3_target: Dict[str, str]) -> None:
             batch_number += 1
             send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
 
-        
-
     except Exception as e:
         logger.error(f"Unexpected error had occurred: {e}")
         raise
