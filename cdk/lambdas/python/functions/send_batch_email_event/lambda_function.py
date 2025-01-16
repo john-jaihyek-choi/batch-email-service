@@ -127,26 +127,47 @@ def process_targets(s3_target: Dict[str, str]) -> None:
         logger.info(f"grouping recipients by {recipients_per_message}...")
 
         # group the recipients and send message to sqs
-        recipient_batch, batch_number = [], 0
-        for row in csv.DictReader(wrapper):
-            recipient_batch.append(row)
-
-            if len(recipient_batch) == recipients_per_message:
-                batch_number += 1
-                
-                send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
-
-                recipient_batch = []
-
-        logger.info(f"processing the remaining recipient batch...")
-
-        # send the remaining recipient batch
-        if recipient_batch:
+        batch_number = 0
+        for batch in batch_read_csv(wrapper, recipients_per_message):
             batch_number += 1
-            send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
+            send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, s3_target["principal_id"], batch)
 
     except Exception as e:
         logger.error(f"Unexpected error had occurred: {e}")
+
+# Generator to read a CSV file in batches.
+def batch_read_csv(file_obj, batch_size: int):
+    batch = []
+    csv_reader = csv.DictReader(file_obj)
+
+    for row in csv_reader:
+        if not row:  # Skip empty rows
+            continue
+
+        try:
+            # validation logic goes here
+
+            batch.append(row)
+        except Exception as e:
+            logger.error(f"Skipping malformed row: {row}. Error: {e}")
+            continue
+
+        if len(batch) == batch_size:
+            yield batch
+            batch = []
+
+    if batch:  # Yield any remaining rows
+        yield batch
+
+def validate_row(row: Dict[str, Any]) -> bool:
+    # Validates a single CSV row.
+
+    required_fields = ["send_to", "first_name", "last_name", "send_from", "email_template"]
+    for field in required_fields:
+        if field not in row or not row[field]:
+            return False
+        
+    return True
 
 def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetime, batch_number: int, principal_id: str, recipient_batch: List[Dict[str, Any]]) -> Dict[Any, Any]:
     try:
