@@ -18,27 +18,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
+recipients_per_message = os.getenv("RECIPIENTS_PER_MESSAGE", 50)
+queue_name = os.getenv("EMAIL_BATCH_QUEUE_NAME")
 
 sqs = boto3.client("sqs", aws_region)
 s3 = boto3.client("s3", aws_region)
 
 def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any]):
+    logger.debug("event: %s", json.dumps(event, indent=2))
+
     # handle invalid events
     if not event or "Records" not in event:
+        logger.info("No s3 event records found")
+
         return {
-            "StatusCode": HTTPStatus.BAD_REQUEST,
-            "Message": "Event missing - Valid S3 event is required."
+            "ResponseMetadata": {
+                "HTTPStatusCode": HTTPStatus.BAD_REQUEST,
+                "Message": "Event missing - Valid S3 event is required."
+            }
         }
 
     # retrieve all target s3 objects and store it in target_objects array for further processing
     target_objects: List[Dict[str, str]] = format_and_filter_targets(event)
 
-    logger.info(target_objects)
+    logger.info("successfully retrieved all targets from event")
+    logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
 
     # open csv target and organize by N batch
     for target in target_objects:
         process_targets(target)
 
+    logger.info("successfully processed the targets")
     return {
         "ResponseMetadata": {
             "HTTPStatusCode": 200
@@ -46,6 +56,8 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any]):
     }
 
 def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
+    logger.info("formatting and filtering tagets...")
+
     res = []
     # iterate on s3 event records and append to res
     for record in s3_event["Records"]:
@@ -68,25 +80,34 @@ def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
 
 def process_targets(s3_target: Dict[str, str]) -> None:
     try:
-        recipients_per_message = os.getenv("RECIPIENTS_PER_MESSAGE")
+        logger.info("processing targets... %s", s3_target)
 
         bucket_name, prefix, key, principal_id = s3_target["bucket_name"], s3_target["prefix"], s3_target["key"], s3_target["principal_id"]
         timestamp = datetime.now(timezone.utc)
 
+        logger.info(f"getting {bucket_name}/{prefix}/{key}...")
         s3_object = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{key}")
+
+        logger.info(f"getting {bucket_name}/{prefix}/{key}...")
         wrapper = io.TextIOWrapper(s3_object["Body"], encoding="utf-8")
 
+        logger.info(f"grouping recipients by {recipients_per_message}...")
+
+        # group the recipients and send message to sqs
         recipient_batch, batch_number = [], 0
         for row in csv.DictReader(wrapper):
             recipient_batch.append(row)
 
             if len(recipient_batch) == recipients_per_message:
                 batch_number += 1
-
+                
                 send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
 
                 recipient_batch = []
 
+        logger.info(f"processing the remaining recipient batch...")
+
+        # send the remaining recipient batch
         if recipient_batch:
             batch_number += 1
             send_sqs_message(bucket_name, prefix, key, timestamp, batch_number, principal_id, recipient_batch)
@@ -95,10 +116,13 @@ def process_targets(s3_target: Dict[str, str]) -> None:
         logger.error(f"Unexpected error had occurred: {e}")
         raise
 
-def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetime, batch_number: int, principal_id: str, recipient_batch: List[Dict[str, Any]]):
+def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetime, batch_number: int, principal_id: str, recipient_batch: List[Dict[str, Any]]) -> Dict[Any, Any]:
     try:
-        queue_name, aws_account_id, aws_region = os.getenv("EMAIL_BATCH_QUEUE_NAME"), os.getenv("AWS_ACCOUNT_ID"), os.getenv("AWS_DEFAULT_REGION")
+        aws_account_id = os.getenv("AWS_ACCOUNT_ID")
 
+        logger.info("processing sqs message...")
+
+        # organize message payload
         message = {
             "batchId": f"{bucket_name}/{prefix}/{key}-{str(timestamp)}-{batch_number}",  
             "recipients": recipient_batch,
@@ -108,19 +132,15 @@ def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetim
             }
         }
 
+        logger.debug(f"sending batch {batch_number}...")
+
+        # send message to sqs queue
         response = sqs.send_message(
             QueueUrl=f"https://sqs.{aws_region}.amazonaws.com/{aws_account_id}/{queue_name}",
             MessageBody=json.dumps(message)
         )
 
-        logger.info(response)
-
-        messages = sqs.receive_message(
-            QueueUrl=f"https://sqs.{aws_region}.amazonaws.com/{aws_account_id}/{queue_name}",
-            MaxNumberOfMessages=10
-        )
-
-        logger.info(messages)
+        logger.debug(f"batch {batch_number} successfully sent: {json.dumps(message)}")
 
         return response
 
