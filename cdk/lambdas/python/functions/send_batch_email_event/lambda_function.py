@@ -32,28 +32,60 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any]):
         logger.info("No s3 event records found")
 
         return {
-            "ResponseMetadata": {
-                "HTTPStatusCode": HTTPStatus.BAD_REQUEST,
-                "Message": "Event missing - Valid S3 event is required."
+            "StatusCode": HTTPStatus.BAD_REQUEST,
+            "Body": {
+                "Message": "Event missing - Valid S3 event is required"
+            },
+            "Headers": {"Content-Type": "application/json"}
+        }
+
+    try:
+        # retrieve all target s3 objects and store it in target_objects array for further processing
+        target_objects: List[Dict[str, str]] = format_and_filter_targets(event)
+
+        if not target_objects:
+            return {
+                "StatusCode": 204,
+                "Headers": {
+                    "Content-Type": "application/json"
+                }
             }
+
+        total_batches_sent, errors = 0, 0
+
+        logger.info("successfully retrieved all targets from event")
+        logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
+
+        # open csv target and organize by N batch
+        for target in target_objects:
+            try:
+                process_targets(target)
+                total_batches_sent += 1
+            except Exception as e:
+                logger.error(f"Error processing target {target}: {e}")
+                errors += 1
+
+        logger.info("successfully processed the targets")
+        return {
+            "StatusCode": HTTPStatus.OK,
+            "Body": {
+                "Message": "Batch processing completed successfully",
+                "processedRecords": len(target_objects),
+                "errors": errors,
+                "batchesSent": total_batches_sent,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            },
+            "Headers": {"Content-Type": "application/json"}
         }
-
-    # retrieve all target s3 objects and store it in target_objects array for further processing
-    target_objects: List[Dict[str, str]] = format_and_filter_targets(event)
-
-    logger.info("successfully retrieved all targets from event")
-    logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
-
-    # open csv target and organize by N batch
-    for target in target_objects:
-        process_targets(target)
-
-    logger.info("successfully processed the targets")
-    return {
-        "ResponseMetadata": {
-            "HTTPStatusCode": 200
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return {
+            "StatusCode": HTTPStatus.INTERNAL_SERVER_ERROR,
+            "Body": {
+                "Message": "An error occurred while processing the batch"
+            },
+            "Headers": {"Content-Type": "application/json"}
         }
-    }
 
 def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
     logger.info("formatting and filtering tagets...")
@@ -61,14 +93,15 @@ def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
     res = []
     # iterate on s3 event records and append to res
     for record in s3_event["Records"]:
-        bucket_name = record["s3"]["bucket"]["name"]
-        s3_object_key = record["s3"]["object"]["key"].split("/")
-        principal_id = record["userIdentity"]["principalId"]
+        event_type: str = record["eventName"]
+        bucket_name: str = record["s3"]["bucket"]["name"]
+        s3_object_key: str = record["s3"]["object"]["key"].split("/")
+        principal_id: str = record["userIdentity"]["principalId"]
 
         prefix = "/".join(s3_object_key[:-1])
         key = urllib.parse.unquote(s3_object_key[-1])
 
-        if "s3" in record and prefix == "batch/send" and key.endswith(".csv"):
+        if "s3" in record and prefix == "batch/send" and key.endswith(".csv") and event_type.startswith("ObjectCreated"):
             res.append({
                 "bucket_name": bucket_name,
                 "prefix": prefix,
@@ -114,7 +147,6 @@ def process_targets(s3_target: Dict[str, str]) -> None:
 
     except Exception as e:
         logger.error(f"Unexpected error had occurred: {e}")
-        raise
 
 def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetime, batch_number: int, principal_id: str, recipient_batch: List[Dict[str, Any]]) -> Dict[Any, Any]:
     try:
@@ -134,9 +166,10 @@ def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetim
 
         logger.debug(f"sending batch {batch_number}...")
 
+        queue_url = sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
         # send message to sqs queue
         response = sqs.send_message(
-            QueueUrl=f"https://sqs.{aws_region}.amazonaws.com/{aws_account_id}/{queue_name}",
+            QueueUrl=queue_url,
             MessageBody=json.dumps(message)
         )
 
@@ -146,4 +179,3 @@ def send_sqs_message(bucket_name: str, prefix: str, key: str, timestamp: datetim
 
     except Exception as e:
         logger.error(f"Unexpected error had occurred: {e}")
-        raise
