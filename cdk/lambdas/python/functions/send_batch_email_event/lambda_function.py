@@ -24,7 +24,7 @@ sqs = boto3.client("sqs", aws_region)
 s3 = boto3.client("s3", aws_region)
 
 
-def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any]):
+def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
     logger.info("event: %s", event)
 
     if not event or "Records" not in event:  # handle invalid events
