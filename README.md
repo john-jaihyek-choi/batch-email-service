@@ -155,10 +155,10 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [x] max retry configuration (maxReceiveCount)
   - [x] emailBatchQueue
     - [x] configure visibility timeout (default 30sec)
-- [ ] SQS producer lambda (sendBatchEmailEvent)
-  - [ ] Test cases
-  - [ ] Logic implementation
-    - [ ] 50 recipients / message (event)
+- [x] SQS producer lambda (sendBatchEmailEvent)
+  - [x] Test cases
+  - [x] Logic implementation
+    - [x] 50 recipients / message (event)
   - [ ] CDK Resource provisioning
 - [ ] SQS consumer lambda (processBatchEmailEvent)
   - [ ] Test cases
