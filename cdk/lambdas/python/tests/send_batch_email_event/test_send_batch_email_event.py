@@ -5,92 +5,82 @@ from typing import List
 from moto import mock_aws
 import boto3
 import os
+import logging
+import json
 from http import HTTPStatus
 from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
-import logging
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
-logging.getLogger("boto3").setLevel(logging.WARNING)
-logging.getLogger("botocore").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-# Test cases:
-# Valid event param
-# Invalid event param
-# empty s3 event
-# invalid eventName
-# Only accept ObjectCreated
 
 
+# Test Cases
 @mock_aws
-class TestSendBatchEmailEvent:
-    def test_valid_single_record_event(
-        self, create_mock_queue, create_mock_s3, valid_single_record_event: S3Event
-    ) -> None:
-        response = lambda_handler(valid_single_record_event, {})
+@pytest.mark.parametrize(
+    "event_fixture, expected_message",
+    [
+        ("valid_single_record_event", "Batch processing completed successfully"),
+        ("valid_multi_record_event", "Batch processing completed successfully"),
+    ],
+)
+def test_valid_events(request, event_fixture, expected_message):
+    event = request.getfixturevalue(event_fixture)
+    response = lambda_handler(event, {})
 
-        assert response["StatusCode"] == HTTPStatus.OK
-        assert response["Body"]["Message"] == "Batch processing completed successfully"
-
-    def test_valid_multi_record_event(
-        self, create_mock_queue, create_mock_s3, valid_multi_record_event: S3Event
-    ) -> None:
-        response = lambda_handler(valid_multi_record_event, {})
-
-        logger.info(response)
-
-        assert response["StatusCode"] == HTTPStatus.OK
-        assert response["Body"]["Message"] == "Batch processing completed successfully"
-
-    def test_missing_required_csv_fields(
-        self,
-        create_mock_queue,
-        create_mock_s3,
-        missing_required_csv_field_event: S3Event,
-    ) -> None:
-        response = lambda_handler(missing_required_csv_field_event, {})
-
-        assert response["StatusCode"] == HTTPStatus.PARTIAL_CONTENT
-        assert response["Body"]["Message"] == "Batch partially processed"
-
-    def test_empty_event(
-        self, create_mock_queue, create_mock_s3, empty_event: S3Event
-    ) -> None:
-        response = lambda_handler(empty_event, {})
-
-        assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
-        assert (
-            response["Body"]["Message"] == "Event missing - Valid S3 event is required"
-        )
-
-    def test_invalid_s3_event_name(
-        self, create_mock_queue, create_mock_s3, invalid_event_name: S3Event
-    ) -> None:
-        response = lambda_handler(invalid_event_name, {})
-
-        assert response["StatusCode"] == HTTPStatus.NO_CONTENT
-
-    def missing_required_csv_fields():
-        assert True
+    assert response["StatusCode"] == HTTPStatus.OK
+    assert response["Message"] == expected_message
 
 
-@pytest.fixture(scope="module")
+def test_missing_required_csv_fields(
+    missing_required_csv_field_event: S3Event,
+) -> None:
+    response = lambda_handler(missing_required_csv_field_event, {})
+
+    assert response["StatusCode"] == HTTPStatus.PARTIAL_CONTENT
+    assert response["Message"] == "Batch partially processed"
+    assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
+
+
+def test_empty_event(empty_event: S3Event) -> None:
+    response = lambda_handler(empty_event, {})
+
+    assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
+    assert response["Message"] == "Event missing - Valid S3 event is required"
+
+
+def test_invalid_s3_event_name(invalid_event_name: S3Event) -> None:
+    response = lambda_handler(invalid_event_name, {})
+
+    assert response["StatusCode"] == HTTPStatus.NO_CONTENT
+    assert response["Message"] == "Target valid targets found"
+
+
+def test_sent_message_validation(
+    create_mock_queue,
+):
+    sqs: SQSClient = create_mock_queue
+    queue = sqs.get_queue_url(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME"))
+    message = sqs.receive_message(QueueUrl=queue["QueueUrl"])
+
+    assert "Recipients" in json.loads(message["Messages"][0]["Body"])
+
+
+# Fixtures
+@pytest.fixture(scope="module", autouse=True)
 def aws_credential_overwrite():
     os.environ["AWS_ACCOUNT_ID"] = "123456789012"
-    yield
 
 
-@pytest.fixture(scope="module")
-def create_mock_queue(aws_credential_overwrite):
+@pytest.fixture(scope="module", autouse=True)
+def create_mock_queue():
     with mock_aws():
         sqs: SQSClient = boto3.client("sqs", os.getenv("AWS_DEFAULT_REGION"))
         sqs.create_queue(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME"))
-        yield
+        yield sqs
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module", autouse=True)
 def create_mock_s3(aws_credential_overwrite):
     aws_region = os.getenv("AWS_DEFAULT_REGION")
     bucket_name = os.getenv("EMAIL_SERVICE_BUCKET_NAME")
@@ -107,12 +97,12 @@ def create_mock_s3(aws_credential_overwrite):
         mock_recipients_data_path: List[str] = [
             "../../assets/batch/example-recipients-list-1.csv",
             "../../assets/batch/example-recipients-list-2.csv",
-            "../../assets/batch/bad-example-recipients-list.csv",
+            "../../assets/batch/bad-example-missing-required-column.csv",
         ]
 
         for path in mock_recipients_data_path:
             file_name = path.split("/")[-1]
-            logger.warning(file_name)
+
             with open(path) as file:
                 recipients_list = file.read()
 
@@ -122,10 +112,10 @@ def create_mock_s3(aws_credential_overwrite):
                 Body=recipients_list,
             )
 
-        yield
+        yield s3
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def valid_single_record_event() -> S3Event:
     file_name = "example-recipients-list-1.csv"
 
@@ -163,7 +153,7 @@ def valid_single_record_event() -> S3Event:
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def valid_multi_record_event() -> S3Event:
     file_names = ["example-recipients-list-1.csv", "example-recipients-list-2.csv"]
 
@@ -205,9 +195,9 @@ def valid_multi_record_event() -> S3Event:
     return payload
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def missing_required_csv_field_event() -> S3Event:
-    file_name = "bad-example-recipients-list.csv"
+    file_name = "bad-example-missing-required-column.csv"
 
     return {
         "Records": [
@@ -243,12 +233,12 @@ def missing_required_csv_field_event() -> S3Event:
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def empty_event() -> S3Event:
     return None
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def invalid_event_name() -> S3Event:
     file_name = "example-recipients-list-1.csv"
 
