@@ -36,20 +36,21 @@ export class CdkStack extends cdk.Stack {
     // SQS Queues:
     const failedEmailBatchQueue: sqs.Queue = new sqs.Queue(
       stack,
-      "failedEmailBatchQueue",
+      "EmailBatchDLQ",
       {
-        queueName: "failedEmailBatchQueue",
+        queueName: "EmailBatchDLQ",
         retentionPeriod: cdk.Duration.days(14),
       }
     );
 
-    const emailBatchQueue: sqs.Queue = new sqs.Queue(stack, "emailBatchQueue", {
-      queueName: "emailBatchQueue",
+    const emailBatchQueue: sqs.Queue = new sqs.Queue(stack, "EmailBatchQueue", {
+      queueName: "EmailBatchQueue",
       deadLetterQueue: {
         queue: failedEmailBatchQueue,
-        maxReceiveCount: 3,
+        maxReceiveCount: 2,
       },
       visibilityTimeout: cdk.Duration.minutes(1),
+      retentionPeriod: cdk.Duration.days(1),
     });
 
     // S3 Buckets:
@@ -60,8 +61,9 @@ export class CdkStack extends cdk.Stack {
 
     const jcBatchEmailServiceBucket: s3.Bucket = new s3.Bucket(
       stack,
-      "jcBatchEmailServiceBucket",
+      "BatchEmailServiceBucket",
       {
+        bucketName: process.env.EMAIL_BATCH_QUEUE_NAME,
         lifecycleRules: [s3BucketLifeCycleRule],
         versioned: true,
         autoDeleteObjects: true,
