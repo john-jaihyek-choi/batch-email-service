@@ -63,7 +63,6 @@ export class CdkStack extends cdk.Stack {
       stack,
       "BatchEmailServiceBucket",
       {
-        bucketName: process.env.EMAIL_BATCH_QUEUE_NAME,
         lifecycleRules: [s3BucketLifeCycleRule],
         versioned: true,
         autoDeleteObjects: true,
@@ -91,6 +90,9 @@ export class CdkStack extends cdk.Stack {
             "../lambdas/python/functions/send_batch_email_event"
           )
         ),
+        environment: {
+          SOURCE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
+        },
       }
     );
 
