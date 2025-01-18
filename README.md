@@ -159,7 +159,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [x] Test cases
   - [x] Logic implementation
     - [x] 50 recipients / message (event)
-  - [ ] CDK Resource provisioning
+  - [x] CDK Resource provisioning
 - [ ] SQS consumer lambda (processBatchEmailEvent)
   - [ ] Test cases
   - [ ] Logic implementation
