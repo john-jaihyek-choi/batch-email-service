@@ -47,10 +47,10 @@ export class CdkStack extends cdk.Stack {
       queueName: "EmailBatchQueue",
       deadLetterQueue: {
         queue: failedEmailBatchQueue,
-        maxReceiveCount: 2,
+        maxReceiveCount: 1,
       },
       visibilityTimeout: cdk.Duration.minutes(1),
-      retentionPeriod: cdk.Duration.days(1),
+      retentionPeriod: cdk.Duration.minutes(30),
     });
 
     // S3 Buckets:
