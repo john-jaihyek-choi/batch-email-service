@@ -30,11 +30,10 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
     if not event or "Records" not in event:  # handle invalid events
         logger.info("No s3 event records found")
 
-        return {
-            "StatusCode": HTTPStatus.BAD_REQUEST.value,
-            "Body": {"Message": "Event missing - Valid S3 event is required"},
-            "Headers": {"Content-Type": "application/json"},
-        }
+        return generate_response(
+            status_code=HTTPStatus.BAD_REQUEST.value,
+            message="Event missing - Valid S3 event is required",
+        )
 
     try:
         target_objects: List[Dict[str, str]] = format_and_filter_targets(
@@ -42,10 +41,10 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
         )  # retrieve all target s3 objects and store it in target_objects array for further processing
 
         if not target_objects:
-            return {
-                "StatusCode": HTTPStatus.NO_CONTENT.value,
-                "Headers": {"Content-Type": "application/json"},
-            }
+            return generate_response(
+                status_code=HTTPStatus.NO_CONTENT.value,
+                message="Target valid targets found",
+            )
 
         target_errors = []
 
@@ -67,31 +66,35 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
 
         if target_errors:
             logger.info("partially processed the batches")
-            return {
-                "StatusCode": HTTPStatus.PARTIAL_CONTENT.value,
-                "Body": {
-                    "Message": "Batch partially processed",
-                    "FailedBatches": target_errors,
-                },
-                "Headers": {"Content-Type": "application/json"},
-            }
+            return generate_response(
+                status_code=HTTPStatus.PARTIAL_CONTENT.value,
+                message="Batch partially processed",
+                body={"FailedBatches": target_errors},
+            )
 
         logger.info("successfully processed the batches")
 
-        return {
-            "StatusCode": HTTPStatus.OK.value,
-            "Body": {
-                "Message": "Batch processing completed successfully",
-            },
-            "Headers": {"Content-Type": "application/json"},
-        }
+        return generate_response(
+            status_code=HTTPStatus.OK.value,
+            message="Batch processing completed successfully",
+        )
+
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        return {
-            "StatusCode": HTTPStatus.INTERNAL_SERVER_ERROR.value,
-            "Body": {"Message": "An error occurred while processing the batch"},
-            "Headers": {"Content-Type": "application/json"},
-        }
+        return generate_response(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+            message="An error occurred while processing the batch",
+        )
+
+
+def generate_response(status_code: int, message: str, body: Dict[Any, Any] = None):
+    response = {
+        "StatusCode": status_code,
+        "Message": message,
+        "Header": {"Content-Type": "application/json"},
+        "Body": json.dumps(body),
+    }
+    return response
 
 
 def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
