@@ -93,7 +93,7 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
 
             except Exception as e:
                 logger.error(
-                    f"Error constructing/sending delivery failure email to admin: {str(e)}"
+                    f"Error constructing/sending delivery failure email to admin: {e}"
                 )
 
             if successful_recipients_count:  # handle partial success case
