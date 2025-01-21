@@ -80,7 +80,7 @@ export class CdkStack extends cdk.Stack {
     // Lambdas:
     const sendBatchEmailEvent: lambda.Function = new lambda.Function(
       stack,
-      "sendBatchEmailEvent",
+      "SendBatchEmailEvent",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
@@ -98,7 +98,7 @@ export class CdkStack extends cdk.Stack {
 
     const processBatchEmailEvent: lambda.Function = new lambda.Function(
       stack,
-      "processBatchEmailEvent",
+      "ProcessBatchEmailEvent",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
@@ -118,7 +118,7 @@ export class CdkStack extends cdk.Stack {
 
     const scheduleBatchEmail: lambda.Function = new lambda.Function(
       stack,
-      "scheduleBatchEmail",
+      "ScheduleBatchEmail",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
@@ -144,7 +144,7 @@ export class CdkStack extends cdk.Stack {
 
     const processSesTemplate: lambda.Function = new lambda.Function(
       stack,
-      "processSesTemplate",
+      "ProcessSesTemplate",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
