@@ -9,19 +9,24 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List
 from http import HTTPStatus
 from dotenv import load_dotenv
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+from collections import OrderedDict
+from pathlib import Path
 
-load_dotenv()
+if Path(".env").exists():  # .env check for local execution
+    load_dotenv()
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
 
 aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
-recipients_per_message = int(os.getenv("RECIPIENTS_PER_MESSAGE", 50))
-queue_name = os.getenv("EMAIL_BATCH_QUEUE_NAME")
-csv_required_fields = os.getenv("CSV_REQUIRED_FIELDS")
 
 sqs = boto3.client("sqs", aws_region)
 s3 = boto3.client("s3", aws_region)
+ses = boto3.client("ses", aws_region)
 
 
 def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
@@ -69,25 +74,45 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
             except Exception as e:
                 logger.error(f"Error processing target {target}: {e}")
                 target_errors.append({"Target": target, "Error": str(e)})
-                continue
 
-        if not successful_recipients_count:  # handle failed batch case
+        if target_errors:  # handle response with target errors
+            error_csv: Dict[str, str] = OrderedDict()
+
+            try:
+                for error in target_errors:  # generate unique csv per target error
+                    headers = error.get("Errors")[0].keys()
+                    target = error.get("Target")
+                    csv_content = generate_csv(headers, error.get("Errors"))
+                    error_csv[target] = csv_content
+
+                send_email_to_admin(
+                    "Batch Email Service - Email Delivery Failed",
+                    f"Following csv targets had issues:\n\n -{"\n -".join(filename.split("/")[-1] for filename in error_csv.keys())}\n",
+                    error_csv,
+                )
+
+            except Exception as e:
+                logger.error(
+                    f"Error constructing/sending delivery failure email to admin: {str(e)}"
+                )
+
+            if successful_recipients_count:  # handle partial success case
+                logger.info("partially processed the batches")
+                return generate_response(
+                    status_code=HTTPStatus.PARTIAL_CONTENT.value,
+                    message="Batch partially processed",
+                    body={"FailedBatches": target_errors},
+                )
+
+            # handle failed batch case
             logger.info("Failed processing the batches")
             return generate_response(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
                 message="Failed processing the batches",
                 body={"FailedBatches": target_errors},
             )
-        elif (
-            successful_recipients_count and target_errors
-        ):  # handle partial success case
-            logger.info("partially processed the batches")
-            return generate_response(
-                status_code=HTTPStatus.PARTIAL_CONTENT.value,
-                message="Batch partially processed",
-                body={"FailedBatches": target_errors},
-            )
-        else:  # handle batch processing success
+        else:
+            # handle successful batch processing
             logger.info("successfully processed the batches")
 
             return generate_response(
@@ -148,6 +173,8 @@ def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
 
 
 def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
+    recipients_per_message = int(os.getenv("RECIPIENTS_PER_MESSAGE", 50))
+
     batch_errors, success_count = [], 0
 
     try:
@@ -226,20 +253,22 @@ def batch_read_csv(file_obj, batch_size: int):
 
             custom_fields = {"row_number": row_number}
 
-            row_info = {**custom_fields, **row}
+            row_info = OrderedDict({**custom_fields, **row})
 
             if validate_result["IsValid"]:
                 batch.append(row_info)
             else:
                 row_errors.append(
-                    {
-                        "Error": "Missing required fields",
-                        "RowNumber": row_number,
-                        "MissingFields": validate_result["MissingFields"],
-                    }
+                    OrderedDict(
+                        {
+                            **row_info,
+                            "Error": "Missing required fields",
+                            "MissingFields": validate_result["MissingFields"],
+                        }
+                    )
                 )
         except Exception as e:
-            row_errors.append({"Error": "Unidentified error", "RowNumber": row_number})
+            row_errors.append(OrderedDict({**row_info, "Error": "Unidentified error"}))
             continue
 
         if len(batch) == batch_size:
@@ -251,6 +280,8 @@ def batch_read_csv(file_obj, batch_size: int):
 
 
 def validate_row(row: Dict[str, Any]) -> Dict[str, Any]:  # Validates a single CSV row.
+    csv_required_fields = os.getenv("CSV_REQUIRED_FIELDS")
+
     missing_fields = []
 
     for field in csv_required_fields.split(","):
@@ -267,6 +298,8 @@ def send_sqs_message(
     principal_id: str,
     recipient_batch: List[Dict[str, Any]],
 ) -> Dict[Any, Any]:
+    queue_name = os.getenv("EMAIL_BATCH_QUEUE_NAME")
+
     try:
         logger.info("processing sqs message...")
 
@@ -294,3 +327,46 @@ def send_sqs_message(
 
     except Exception as e:
         logger.error(f"Unexpected error had occurred: {e}")
+
+
+def generate_csv(headers: List[str], contents: List[Dict[str, Any]]) -> str:
+    # Generate CSV content in memory
+    output = io.StringIO()
+    csv_writer = csv.DictWriter(output, fieldnames=headers)
+    csv_writer.writeheader()
+
+    for content in contents:
+        csv_writer.writerow(content)
+
+    csv_content = output.getvalue()
+    output.close()
+
+    return csv_content
+
+
+def send_email_to_admin(
+    subject: str, body: str, csv_attachments: Dict[str, str] = {}
+) -> None:
+    msg = MIMEMultipart()
+    msg["From"] = os.getenv("SES_NO_REPLY_SENDER")
+    msg["To"] = os.getenv("SES_ADMIN_EMAIL")
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+    logger.warning(body)
+    for filename, content in csv_attachments.items():
+        logger.warning(filename)
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(content.encode("utf-8"))
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition", f'attachment; filename="{filename.split('/')[-1]}"'
+        )
+        msg.attach(part)
+
+    logger.warning(msg.as_string())
+
+    ses.send_raw_email(
+        Source=os.getenv("SES_NO_REPLY_SENDER"),
+        Destinations=os.getenv("SES_ADMIN_EMAIL").split(","),
+        RawMessage={"Data": msg.as_string()},
+    )
