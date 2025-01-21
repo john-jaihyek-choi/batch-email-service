@@ -1,5 +1,6 @@
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_s3.client import S3Client
+from mypy_boto3_ses.client import SESClient
 import pytest
 from typing import List
 from moto import mock_aws
@@ -106,10 +107,11 @@ def create_mock_s3():
         )
 
         mock_recipients_data_path: List[str] = [
-            "../../assets/batch/example-recipients-list-1.csv",
-            "../../assets/batch/example-recipients-list-2.csv",
-            "../../assets/batch/example-recipients-list-3.csv",
-            "../../assets/batch/bad-example-missing-required-column.csv",
+            "../../assets/batch/examples/valid-recipients-list-1.csv",
+            "../../assets/batch/examples/valid-recipients-list-2.csv",
+            "../../assets/batch/examples/partially-complete-list.csv",
+            "../../assets/batch/examples/partially-complete-list-1.csv",
+            "../../assets/batch/examples/missing-required-column.csv",
         ]
 
         for path in mock_recipients_data_path:
@@ -127,9 +129,18 @@ def create_mock_s3():
         yield s3
 
 
+@pytest.fixture(scope="module", autouse=True)
+def setup_ses():
+    # Initialize SES client
+    ses_client: SESClient = boto3.client(
+        "ses", region_name=os.getenv("AWS_DEFAULT_REGION")
+    )
+    ses_client.verify_email_identity(EmailAddress=os.getenv("SES_NO_REPLY_SENDER"))
+
+
 @pytest.fixture
 def valid_single_record_event() -> S3Event:
-    file_name = "example-recipients-list-1.csv"
+    file_name = "valid-recipients-list-1.csv"
 
     return {
         "Records": [
@@ -167,7 +178,7 @@ def valid_single_record_event() -> S3Event:
 
 @pytest.fixture
 def valid_multi_record_event() -> S3Event:
-    file_names = ["example-recipients-list-1.csv", "example-recipients-list-2.csv"]
+    file_names = ["valid-recipients-list-1.csv", "valid-recipients-list-2.csv"]
 
     payload = {"Records": []}
 
@@ -209,7 +220,7 @@ def valid_multi_record_event() -> S3Event:
 
 @pytest.fixture
 def partial_success_event() -> S3Event:
-    file_names = ["example-recipients-list-3.csv"]
+    file_names = ["partially-complete-list.csv", "partially-complete-list-1.csv"]
 
     payload = {"Records": []}
 
@@ -251,7 +262,7 @@ def partial_success_event() -> S3Event:
 
 @pytest.fixture
 def missing_required_csv_field_event() -> S3Event:
-    file_name = "bad-example-missing-required-column.csv"
+    file_name = "missing-required-column.csv"
 
     return {
         "Records": [
@@ -294,7 +305,7 @@ def empty_event() -> S3Event:
 
 @pytest.fixture
 def invalid_event_name() -> S3Event:
-    file_name = "example-recipients-list-1.csv"
+    file_name = "valid-recipients-list-1.csv"
 
     return {
         "Records": [
