@@ -71,11 +71,40 @@ export class CdkStack extends cdk.Stack {
     );
 
     // Deploy initial asset files to S3 bucket
-    new s3d.BucketDeployment(stack, "DeployInitialAssets", {
-      destinationBucket: jcBatchEmailServiceBucket,
-      sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
-      exclude: ["**/.DS_Store"],
-    });
+    const batchEmailBucket = new s3d.BucketDeployment(
+      stack,
+      "DeployInitialAssets",
+      {
+        destinationBucket: jcBatchEmailServiceBucket,
+        sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
+        exclude: ["**/.DS_Store"],
+      }
+    );
+
+    // // IAM Policies:
+    // sendBatchEmailEvent Lambda Execution Roles:
+    const sendBatchEmailEventRole = new iam.Role(
+      stack,
+      "SendBatchEmailEventRole",
+      {
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      }
+    );
+    // AWS managed basic lambda execution role
+    sendBatchEmailEventRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        "service-role/AWSLambdaBasicExecutionRole"
+      )
+    );
+    // Custom inline policy for specific needs
+    sendBatchEmailEventRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["s3:GetObject", "s3:DeleteObject", "s3:CopyObject"],
+        resources: [
+          `${batchEmailBucket.deployedBucket.bucketArn}/batch/send/*`,
+        ],
+      })
+    );
 
     // Lambdas:
     const sendBatchEmailEvent: lambda.Function = new lambda.Function(
@@ -93,6 +122,7 @@ export class CdkStack extends cdk.Stack {
         environment: {
           SOURCE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
         },
+        role: sendBatchEmailEventRole,
       }
     );
 
