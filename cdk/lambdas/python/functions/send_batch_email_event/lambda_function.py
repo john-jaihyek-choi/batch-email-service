@@ -46,38 +46,55 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
                 message="Target valid targets found",
             )
 
-        target_errors = []
+        target_errors, successful_recipients_count = [], 0
 
         logger.info("successfully retrieved all targets from event")
         logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
 
         for target in target_objects:  # open csv target and organize by N batch
             try:
-                batch_errors = process_targets(target)
+                batch = process_targets(target)
 
                 # add batch_errors to target_errors if any
-                if batch_errors.get("Errors"):
-                    target_errors.append(batch_errors)
+                if batch.get("ErrorCount") > 0:
+                    target_errors.append(
+                        {
+                            "Target": batch.get("Target"),
+                            "Errors": batch.get("Errors"),
+                            "ErrorCount": batch.get("ErrorCount"),
+                        }
+                    )
+                successful_recipients_count += batch.get("SuccessCount", 0)
 
             except Exception as e:
                 logger.error(f"Error processing target {target}: {e}")
                 target_errors.append({"Target": target, "Error": str(e)})
                 continue
 
-        if target_errors:
+        if not successful_recipients_count:  # handle failed batch case
+            logger.info("Failed processing the batches")
+            return generate_response(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+                message="Failed processing the batches",
+                body={"FailedBatches": target_errors},
+            )
+        elif (
+            successful_recipients_count and target_errors
+        ):  # handle partial success case
             logger.info("partially processed the batches")
             return generate_response(
                 status_code=HTTPStatus.PARTIAL_CONTENT.value,
                 message="Batch partially processed",
                 body={"FailedBatches": target_errors},
             )
+        else:  # handle batch processing success
+            logger.info("successfully processed the batches")
 
-        logger.info("successfully processed the batches")
-
-        return generate_response(
-            status_code=HTTPStatus.OK.value,
-            message="Batch processing completed successfully",
-        )
+            return generate_response(
+                status_code=HTTPStatus.OK.value,
+                message="Batch processing completed successfully",
+                body={},
+            )
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -131,7 +148,7 @@ def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
 
 
 def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
-    batch_errors = []
+    batch_errors, success_count = [], 0
 
     try:
         logger.info("processing targets... %s", s3_target)
@@ -158,6 +175,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
         for batch, failed_rows in batch_read_csv(wrapper, recipients_per_message):
             batch_id = f"{bucket_name}/{prefix}/{key}-{timestamp}-{batch_number}"
             batch_number += 1
+            success_count += len(batch)
 
             try:
                 if batch:
@@ -168,6 +186,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
                         principal_id,
                         batch,
                     )
+
             except Exception as e:
                 logger.error(f"Failed to send batch {batch_number}: {e}")
                 batch_errors.append(
@@ -187,6 +206,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
 
     return {
         "Target": target_path,
+        "SuccessCount": success_count,
         "Errors": batch_errors,
         "ErrorCount": len(batch_errors),
     }
@@ -204,8 +224,12 @@ def batch_read_csv(file_obj, batch_size: int):
         try:
             validate_result = validate_row(row)
 
+            custom_fields = {"row_number": row_number}
+
+            row_info = {**custom_fields, **row}
+
             if validate_result["IsValid"]:
-                batch.append(row)
+                batch.append(row_info)
             else:
                 row_errors.append(
                     {
