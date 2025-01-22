@@ -54,7 +54,7 @@ def test_empty_event(empty_event: S3Event) -> None:
     response = lambda_handler(empty_event, {})
 
     assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
-    assert response["Message"] == "Event missing - Valid S3 event is required"
+    assert response["Message"] == "Invalid event: Missing 'Records' key"
 
 
 def test_invalid_s3_event_name(invalid_event_name: S3Event) -> None:
