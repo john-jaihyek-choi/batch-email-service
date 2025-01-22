@@ -8,7 +8,6 @@ import boto3
 import os
 import logging
 import json
-from pathlib import Path
 from http import HTTPStatus
 from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
