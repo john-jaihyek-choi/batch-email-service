@@ -6,6 +6,7 @@ node_modules
 .env
 .pytest_cache
 __pycache__
+*.egg-info
 
 # CDK asset staging directory
 .cdk.staging
