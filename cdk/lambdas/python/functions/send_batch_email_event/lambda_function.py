@@ -26,19 +26,12 @@ logger = logging.getLogger(__name__)
 
 def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
     logger.info("event: %s", event)
-
-    if not event or "Records" not in event:  # handle invalid events
-        logger.info("No s3 event records found")
-
-        return generate_response(
-            status_code=HTTPStatus.BAD_REQUEST.value,
-            message="Event missing - Valid S3 event is required",
-        )
-
     try:
-        target_objects: List[Dict[str, str]] = format_and_filter_targets(
-            event
-        )  # retrieve all target s3 objects and store it in target_objects array for further processing
+        if not event or not event.get("Records"):  # handle invalid events
+            raise ValueError("Invalid event: Missing 'Records' key")
+
+        # retrieve all target s3 objects and store it in target_objects array for further processing
+        target_objects: List[Dict[str, str]] = format_and_filter_targets(event)
 
         if not target_objects:
             return generate_response(
@@ -105,13 +98,15 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
             logger.info("successfully processed the batches")
 
             return generate_response(
-                status_code=HTTPStatus.OK.value,
-                message="Batch processing completed successfully",
-                body={},
+                HTTPStatus.OK.value, "Batch processing completed successfully"
             )
 
+    except ValueError as e:
+        logger.exception(f"Value Error: {e}")
+        return generate_response(HTTPStatus.BAD_REQUEST.value, str(e))
+
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.exception(f"Critical error in lambda_handler: {str(e)}")
         return generate_response(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
             message="An error occurred while processing the batch",
