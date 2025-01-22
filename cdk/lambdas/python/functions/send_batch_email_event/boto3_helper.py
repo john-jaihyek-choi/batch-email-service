@@ -3,6 +3,7 @@ import os
 import logging
 import io
 import boto3
+import boto3.exceptions
 from datetime import datetime
 from typing import Dict, Any, List
 from email.mime.multipart import MIMEMultipart
@@ -64,23 +65,29 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
                         principal_id,
                         batch,
                     )
-
             except Exception as e:
-                logger.error(f"Failed to send batch {batch_number}: {e}")
+                logger.exception(
+                    f"Failed to send batch {batch_number} for {target_path}"
+                )
                 batch_errors.append(
                     {
                         "FailedRecipients": batch,
                         "Error": f"Failed to send batch: {str(e)}",
                     }
                 )
-                continue
+            finally:
+                if (
+                    failed_rows
+                ):  # add to collection of failed rows to batch errors if any
+                    batch_errors.extend(failed_rows)
 
-            if failed_rows:  # add to collection of failed rows to batch errors if any
-                batch_errors.extend(failed_rows)
+    except boto3.exceptions.Boto3Error as boto_err:
+        logger.error(f"Boto3 error while processing {target_path}: {boto_err}")
+        batch_errors.append({"Error": "Boto3 error", "Details": str(boto_err)})
 
     except Exception as e:
-        logger.error(f"Unexpected error had occurred: {e}")
-        batch_errors.extend({"Error": str(e), "Target": s3_target})
+        logger.exception(f"Unexpected error during processing of {target_path}")
+        batch_errors.append({"Error": "Unexpected error", "Details": str(e)})
 
     return {
         "Target": target_path,
@@ -102,7 +109,6 @@ def send_sqs_message(
     try:
         logger.info("processing sqs message...")
 
-        # organize message payload
         message = {
             "BatchId": batch_id,
             "Recipients": recipient_batch,
@@ -111,10 +117,7 @@ def send_sqs_message(
 
         logger.debug(f"sending batch {batch_number}...")
 
-        # get queue url
         queue_url = sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
-
-        # send message to sqs queue
         response = sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(message))
 
         logger.debug(
@@ -124,8 +127,13 @@ def send_sqs_message(
 
         return response
 
+    except boto3.exceptions.Boto3Error as boto_err:
+        logger.error(f"Boto3 error when sending batch {batch_id}: {boto_err}")
+        raise
+
     except Exception as e:
-        logger.error(f"Unexpected error had occurred: {e}")
+        logger.exception(f"Unexpected error in sending batch {batch_id}")
+        raise
 
 
 def send_email_to_admin(
