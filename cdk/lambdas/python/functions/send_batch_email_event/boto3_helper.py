@@ -4,15 +4,13 @@ import logging
 import io
 import boto3
 import boto3.exceptions
+import botocore.exceptions
 from datetime import datetime
 from typing import Dict, Any, List
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-from utils import (
-    batch_read_csv,
-)
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
@@ -24,77 +22,12 @@ s3 = boto3.client("s3", aws_region)
 ses = boto3.client("ses", aws_region)
 
 
-def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
-    recipients_per_message = int(os.getenv("RECIPIENTS_PER_MESSAGE", 50))
-
-    batch_errors, success_count = [], 0
-
+def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
     try:
-        logger.info("processing targets... %s", s3_target)
+        return s3.get_object(Bucket=bucket_name, Key=object_key)
 
-        bucket_name, prefix, key, principal_id, timestamp = (
-            s3_target["BucketName"],
-            s3_target["Prefix"],
-            s3_target["Key"],
-            s3_target["PrincipalId"],
-            s3_target["Timestamp"],
-        )
-
-        s3_object = s3.get_object(Bucket=bucket_name, Key=f"{prefix}/{key}")
-        target_path = f"{bucket_name}/{prefix}/{key}"
-
-        logger.info(f"getting {target_path}...")
-        wrapper = io.TextIOWrapper(s3_object["Body"], encoding="utf-8")
-
-        logger.info(f"grouping recipients by {recipients_per_message}...")
-
-        batch_number = 1
-
-        # group the recipients and send message to sqs
-        for batch, failed_rows in batch_read_csv(wrapper, recipients_per_message):
-            batch_id = f"{bucket_name}/{prefix}/{key}-{timestamp}-{batch_number}"
-            batch_number += 1
-            success_count += len(batch)
-
-            try:
-                if batch:
-                    send_sqs_message(
-                        batch_id,
-                        timestamp,
-                        batch_number,
-                        principal_id,
-                        batch,
-                    )
-            except Exception as e:
-                logger.exception(
-                    f"Failed to send batch {batch_number} for {target_path}"
-                )
-                batch_errors.append(
-                    {
-                        "FailedRecipients": batch,
-                        "Error": f"Failed to send batch: {str(e)}",
-                    }
-                )
-            finally:
-                if (
-                    failed_rows
-                ):  # add to collection of failed rows to batch errors if any
-                    batch_errors.extend(failed_rows)
-
-    except boto3.exceptions.Boto3Error as boto_err:
-        logger.error(f"Boto3 error while processing {target_path}: {boto_err}")
-        batch_errors.append({"Error": "Boto3 error", "Details": str(boto_err)})
-
-    except Exception as e:
-        logger.exception(f"Unexpected error during processing of {target_path}")
-        batch_errors.append({"Error": "Unexpected error", "Details": str(e)})
-
-    return {
-        "Target": target_path,
-        "SuccessCount": success_count,
-        "Errors": batch_errors,
-        "ErrorCount": len(batch_errors),
-    }
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 error at get_s3_object: {e}")
 
 
 def send_sqs_message(
@@ -127,12 +60,8 @@ def send_sqs_message(
 
         return response
 
-    except boto3.exceptions.Boto3Error as boto_err:
-        logger.error(f"Boto3 error when sending batch {batch_id}: {boto_err}")
-        raise
-
-    except Exception as e:
-        logger.exception(f"Unexpected error in sending batch {batch_id}")
+    except boto3.exceptions.Boto3Error as e:
+        logger.error(f"Boto3 error at send_sqs_message {batch_id}: {e}")
         raise
 
 
@@ -161,5 +90,5 @@ def send_email_to_admin(
             Destinations=os.getenv("SES_ADMIN_EMAIL").split(","),
             RawMessage={"Data": msg.as_string()},
         )
-    except Exception as e:
-        logger.error(f"Error constructing/sending delivery failure email to admin: {e}")
+    except boto3.exceptions.Boto3Error as e:
+        logger.error(f"Boto3 error at send_email_to_admin: {e}")
