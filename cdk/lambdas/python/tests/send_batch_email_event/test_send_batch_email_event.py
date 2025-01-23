@@ -1,18 +1,24 @@
-from mypy_boto3_sqs.client import SQSClient
-from mypy_boto3_s3.client import S3Client
-from mypy_boto3_ses.client import SESClient
 import pytest
-from typing import List
-from moto import mock_aws
-import boto3
 import os
 import logging
 import json
+import boto3
+from typing import List
+from moto import mock_aws
+from mypy_boto3_sqs.client import SQSClient
+from mypy_boto3_s3.client import S3Client
+from mypy_boto3_ses.client import SESClient
 from http import HTTPStatus
 from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL"))
+
+# Restrict external library logs to WARNING due to noise
+hide_logs = ["boto3_helper", "boto3", "urlib3", "botocore"]
+for module in hide_logs:
+    logging.getLogger(module).setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
