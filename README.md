@@ -432,6 +432,8 @@ List of resources found helpful during development
 - [DMARC Check Tool](https://mxtoolbox.com/dmarc.aspx)
 - [Mocking AWS for testing](https://docs.getmoto.org/en/latest/docs/getting_started.html)
 - [AWS CDK API Documentation](https://docs.aws.amazon.com/cdk/api/v2/docs/aws-construct-library.html)
+- [Mail Tester App](https://www.mail-tester.com/)
+- [SES Pitfalls](https://dev.to/slsbytheodo/from-zero-to-hero-send-aws-ses-emails-like-a-pro-4nei)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
