@@ -9,8 +9,11 @@ from utils import (
     generate_response,
     format_and_filter_targets,
     generate_csv,
+    # generate_html_template,
+    process_targets,
+    generate_target_errors_payload,
 )
-from boto3_helper import process_targets, send_email_to_admin
+from boto3_helper import send_email_to_admin
 
 # for local executions
 try:
@@ -25,10 +28,11 @@ logger = logging.getLogger(__name__)
 
 
 def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
-    logger.info("event: %s", event)
     try:
         if not event or not event.get("Records"):  # handle invalid events
             raise ValueError("Invalid event: Missing 'Records' key")
+
+        logger.info("event: %s", json.dumps(event, indent=2))
 
         # retrieve all target s3 objects and store it in target_objects array for further processing
         target_objects: List[Dict[str, str]] = format_and_filter_targets(event)
@@ -46,22 +50,33 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
 
         for target in target_objects:  # open csv target and organize by N batch
             try:
+                logger.info(f"Processing {target}")
                 batch = process_targets(target)
-
-                # add batch_errors to target_errors if any
-                if batch.get("ErrorCount") > 0:
-                    target_errors.append(
-                        {
-                            "Target": batch.get("Target"),
-                            "Errors": batch.get("Errors"),
-                            "ErrorCount": batch.get("ErrorCount"),
-                        }
-                    )
-                successful_recipients_count += batch.get("SuccessCount", 0)
-
             except Exception as e:
-                logger.error(f"Error processing target {target}: {e}")
-                target_errors.append({"Target": target, "Error": str(e)})
+                logger.exception(f"Error processing target {target}: {e}")
+                target_error_payload = generate_target_errors_payload(
+                    batch.get("Target"),
+                    str(e),
+                    batch.get("Errors"),
+                    success_rate,
+                )
+                target_errors.append(target_error_payload)
+
+            # add batch_errors to target_errors if any
+            if batch.get("ErrorCount", 0) > 0:
+                error_count = batch.get("ErrorCount")
+                total_batch_count = error_count + batch.get("SuccessCount", 0)
+                success_rate = round((error_count) / total_batch_count * 100, 2)
+
+                target_error_payload = generate_target_errors_payload(
+                    batch.get("Target"),
+                    "Error initiating emails",
+                    batch.get("Errors"),
+                    success_rate,
+                )
+                target_errors.append(target_error_payload)
+
+            successful_recipients_count += batch.get("SuccessCount", 0)
 
         if target_errors:  # handle response with target errors
             error_csv: Dict[str, str] = OrderedDict()
@@ -72,11 +87,19 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
                 csv_content = generate_csv(headers, error.get("Errors"))
                 error_csv[target] = csv_content
 
-            send_email_to_admin(
-                "Batch Email Service - Email Delivery Failed",
-                f"Following csv targets had issues:\n\n -{"\n -".join(filename.split("/")[-1] for filename in error_csv.keys())}\n",
-                error_csv,
-            )
+            # try:
+            #     html_body = generate_html_template()
+            # except Exception as e:
+            #     logger.exception(f"Error generating html template: {e}")
+
+            try:
+                send_email_to_admin(
+                    "Batch Email Service - Email Delivery Failed",
+                    f"Following csv targets had issues:\n\n -{"\n -".join(filename.split("/")[-1] for filename in error_csv.keys())}\n",
+                    error_csv,
+                )
+            except Exception as e:
+                logger.error(f"Error at send_email_to_admin: {e}")
 
             if successful_recipients_count:  # handle partial success case
                 logger.info("partially processed the batches")
