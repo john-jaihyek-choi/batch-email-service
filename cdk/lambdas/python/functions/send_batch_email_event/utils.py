@@ -4,11 +4,12 @@ import logging
 import os
 import csv
 import io
+import re
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Literal
 from boto3_helper import get_s3_object, send_sqs_message
 
 if Path(".env").exists():  # .env check for local execution
@@ -22,6 +23,15 @@ logger = logging.getLogger(__name__)
 def batch_read_csv(file_obj, batch_size: int):
     batch, row_errors = [], []
     csv_reader = csv.DictReader(file_obj)
+    if csv_reader.fieldnames is None:
+        row_errors.append(
+            OrderedDict(
+                {
+                    "Error": "No headers found",
+                }
+            )
+        )
+        yield batch, row_errors
 
     for row_number, row in enumerate(csv_reader, start=2):
         if not row:  # Skip empty rows
@@ -112,16 +122,66 @@ def generate_csv(headers: List[str], contents: List[Dict[str, Any]]) -> str:
         logger.error(f"Error generating csv: {e}")
 
 
-# def generate_html_template(
-#     s3_key: str,
-#     success_rate: int,
-# ) -> None:
-#     try:
-#         pass
-#     except Exception as e:
-#         logger.exception(f"Error generating html template: {e}")
+def generate_email_template(
+    s3_bucket: str,
+    s3_key: str,
+    template_type: Literal["html", "txt"],
+    target_errors: List[Dict[str, Any]],
+) -> str:
+    try:
+        file = get_s3_object(s3_bucket, s3_key)
+        template = file["Body"].read().decode("utf-8")
 
-#     return
+        attachments, batch_success_details = [], []
+        aggregate_success_count, aggregate_error_count = 0, 0
+
+        for target in target_errors:
+            file_name = target["Target"].split("/")[-1]
+
+            success_count, error_count = target.get("SuccessCount", 0), target.get(
+                "ErrorCount", 0
+            )
+            total_count = success_count + error_count
+            aggregate_success_count += success_count
+            aggregate_error_count += error_count
+
+            if template_type == "html":
+                batch_success_details.append(
+                    f"<li>{file_name} – {error_count} of {total_count} rows failed</li>"
+                )
+
+                attachments.append(f"<li><a>{file_name}</a></li>")
+            else:
+                batch_success_details.append(
+                    f"- {error_count} of {total_count} rows failed\n"
+                )
+                attachments.append(f"- {file_name}\n")
+
+        aggregate_total_count = aggregate_success_count + aggregate_error_count
+        aggregate_error_rate = round(
+            aggregate_error_count / aggregate_total_count * 100
+        )
+        aggregate_success_rate = round(
+            aggregate_success_count / aggregate_total_count * 100
+        )
+
+        replacements = {
+            "{{aggregate_success_rate}}": f"{round(aggregate_success_rate)}",
+            "{{aggregate_error_rate}}": f"{round(aggregate_error_rate)}",
+            "{{attachment_list}}": f"{"".join(attachments)}",
+            "{{batch_success_details}}": f"{"".join(batch_success_details)}",
+        }
+
+        template = re.sub(
+            r"{{(aggregate_success_rate|aggregate_error_rate|attachment_list|batch_success_details)}}",
+            lambda match: replacements.get(match.group(0), match.group(0)),
+            template,
+        )
+
+        return template
+    except Exception as e:
+        logger.exception(f"Error generating template: {e}")
+        return ""
 
 
 def generate_response(status_code: int, message: str, body: Dict[Any, Any] = None):
@@ -141,14 +201,16 @@ def generate_target_errors_payload(
     target: str,
     error_detail: str,
     error_batch: List[Dict[str, Any]],
-    success_rate: int,
+    error_count: int,
+    success_count: int,
 ) -> Dict[str, Any]:
     try:
         return {
             "Target": target,
             "Error": error_detail,
             "Errors": error_batch,
-            "SuccessRate": success_rate,
+            "ErrorCount": error_count,
+            "SuccessCount": success_count,
         }
     except TypeError as e:
         logger.exception(f"Type error at generate_target_errors_payload: {e}")
@@ -174,8 +236,6 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
 
         batch_errors, success_count = [], 0
 
-        logger.debug("processing targets... %s", json.dumps(s3_target, indent=2))
-
         bucket_name, prefix, key, principal_id, timestamp = (
             s3_target["BucketName"],
             s3_target["Prefix"],
@@ -188,16 +248,6 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
 
         logger.info(f"getting {target_path}...")
         s3_object = get_s3_object(bucket_name=bucket_name, object_key=f"{prefix}/{key}")
-
-        if not s3_object.get("Body"):
-            logger.debug("No Body found in s3 object")
-            batch_errors.append("")
-            return generate_batch_payload(
-                target_path,
-                success_count,
-                [{"Error": f"No content found in {target_path}"}],
-                len(batch_errors),
-            )
 
         wrapper = io.TextIOWrapper(s3_object.get("Body"), encoding="utf-8")
 
@@ -237,12 +287,12 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
         logger.exception(f"Error at processing target: {e}")
         batch_errors.append({"Error": "Unexpected error", "Details": str(e)})
     finally:
-        return {
-            "Target": target_path,
-            "SuccessCount": success_count,
-            "Errors": batch_errors,
-            "ErrorCount": len(batch_errors),
-        }
+        return generate_batch_payload(
+            target_path,
+            success_count,
+            errors=batch_errors,
+            error_count=len(batch_errors),
+        )
 
 
 def validate_fields(
