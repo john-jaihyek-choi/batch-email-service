@@ -1,0 +1,25 @@
+
+Batch Email Error Report
+Detailed Summary of Recent Operations
+
+---
+
+Summary
+We encountered issues sending emails in the following batches:
+{{batch_success_details}}
+
+---
+
+Performance Summary
+Failure ({{aggregate_error_rate}}) / Success ({{aggregate_success_rate}})
+
+---
+
+Attachments
+Attached are the CSV files containing detailed error logs:
+{{attachment_list}}
+
+---
+
+This is an automated message. Please do not reply directly.
+© 2025 Your Company. All rights reserved.
