@@ -63,6 +63,13 @@ def test_empty_event(empty_event: S3Event) -> None:
     assert response["Message"] == "Invalid event: Missing 'Records' key"
 
 
+def test_empty_s3_content(empty_s3_content_event: S3Event) -> None:
+    response = lambda_handler(empty_s3_content_event, {})
+
+    assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert response["Message"] == "Failed processing the batches"
+
+
 def test_invalid_s3_event_name(invalid_event_name: S3Event) -> None:
     response = lambda_handler(invalid_event_name, {})
 
@@ -86,7 +93,7 @@ def aws_credential_overwrite():
     logger.info("Overwriting environment variables for testing...")
 
     os.environ["AWS_ACCOUNT_ID"] = "123456789012"
-    os.environ["TEST_MOCK_S3_BUCKET_NAME"] = "test-mock-s3-bucket"
+    os.environ["BATCH_EMAIL_SERVICE_BUCKET_NAME"] = "test-mock-s3-bucket"
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -100,7 +107,7 @@ def create_mock_queue():
 @pytest.fixture(scope="module", autouse=True)
 def create_mock_s3():
     aws_region = os.getenv("AWS_DEFAULT_REGION")
-    bucket_name = os.getenv("TEST_MOCK_S3_BUCKET_NAME")
+    bucket_name = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
 
     with mock_aws():
         s3: S3Client = boto3.client("s3", aws_region)
@@ -117,6 +124,7 @@ def create_mock_s3():
             "../../assets/batch/examples/partially-complete-list.csv",
             "../../assets/batch/examples/partially-complete-list-1.csv",
             "../../assets/batch/examples/missing-required-column.csv",
+            "../../assets/batch/examples/empty-s3-content.csv",
         ]
 
         for path in mock_recipients_data_path:
@@ -129,6 +137,23 @@ def create_mock_s3():
                 Bucket=bucket_name,
                 Key=f"batch/send/{file_name}",
                 Body=recipients_list,
+            )
+
+        mock_email_templates_path: List[str] = [
+            "../../assets/templates/send-batch-failure-email-template.html",
+            "../../assets/templates/send-batch-failure-email-template.txt",
+        ]
+
+        for path in mock_email_templates_path:
+            file_name = path.split("/")[-1]
+
+            with open(path) as file:
+                template = file.read()
+
+            s3.put_object(
+                Bucket=bucket_name,
+                Key=f"templates/{file_name}",
+                Body=template,
             )
 
         yield s3
@@ -165,9 +190,9 @@ def valid_single_record_event() -> S3Event:
                     "s3SchemaVersion": "1.0",
                     "configurationId": "testConfigRule",
                     "bucket": {
-                        "name": os.getenv("TEST_MOCK_S3_BUCKET_NAME"),
+                        "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
                         "ownerIdentity": {"principalId": "EXAMPLE"},
-                        "arn": f"arn:aws:s3:::{os.getenv("TEST_MOCK_S3_BUCKET_NAME")}",
+                        "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
                     },
                     "object": {
                         "key": f"batch/send/{file_name}",
@@ -205,9 +230,9 @@ def valid_multi_record_event() -> S3Event:
                 "s3SchemaVersion": "1.0",
                 "configurationId": "testConfigRule",
                 "bucket": {
-                    "name": os.getenv("TEST_MOCK_S3_BUCKET_NAME"),
+                    "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
                     "ownerIdentity": {"principalId": "EXAMPLE"},
-                    "arn": f"arn:aws:s3:::{os.getenv("TEST_MOCK_S3_BUCKET_NAME")}",
+                    "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
                 },
                 "object": {
                     "key": f"batch/send/{name}",
@@ -247,9 +272,9 @@ def partial_success_event() -> S3Event:
                 "s3SchemaVersion": "1.0",
                 "configurationId": "testConfigRule",
                 "bucket": {
-                    "name": os.getenv("TEST_MOCK_S3_BUCKET_NAME"),
+                    "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
                     "ownerIdentity": {"principalId": "EXAMPLE"},
-                    "arn": f"arn:aws:s3:::{os.getenv("TEST_MOCK_S3_BUCKET_NAME")}",
+                    "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
                 },
                 "object": {
                     "key": f"batch/send/{name}",
@@ -287,9 +312,9 @@ def missing_required_csv_field_event() -> S3Event:
                     "s3SchemaVersion": "1.0",
                     "configurationId": "testConfigRule",
                     "bucket": {
-                        "name": os.getenv("TEST_MOCK_S3_BUCKET_NAME"),
+                        "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
                         "ownerIdentity": {"principalId": "EXAMPLE"},
-                        "arn": f"arn:aws:s3:::{os.getenv("TEST_MOCK_S3_BUCKET_NAME")}",
+                        "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
                     },
                     "object": {
                         "key": f"batch/send/{file_name}",
@@ -306,6 +331,44 @@ def missing_required_csv_field_event() -> S3Event:
 @pytest.fixture
 def empty_event() -> S3Event:
     return None
+
+
+@pytest.fixture
+def empty_s3_content_event() -> S3Event:
+    file_name = "empty-s3-content.csv"
+
+    return {
+        "Records": [
+            {
+                "eventVersion": "2.0",
+                "eventSource": "aws:s3",
+                "awsRegion": os.getenv("AWS_DEFAULT_REGION"),
+                "eventTime": "1970-01-01T00:00:00.000Z",
+                "eventName": "ObjectCreated:Put",
+                "userIdentity": {"principalId": "EXAMPLE"},
+                "requestParameters": {"sourceIPAddress": "127.0.0.1"},
+                "responseElements": {
+                    "x-amz-request-id": "EXAMPLE123456789",
+                    "x-amz-id-2": "EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH",
+                },
+                "s3": {
+                    "s3SchemaVersion": "1.0",
+                    "configurationId": "testConfigRule",
+                    "bucket": {
+                        "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
+                        "ownerIdentity": {"principalId": "EXAMPLE"},
+                        "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
+                    },
+                    "object": {
+                        "key": f"batch/send/{file_name}",
+                        "size": 1024,
+                        "eTag": "0123456789abcdef0123456789abcdef",
+                        "sequencer": "0A1B2C3D4E5F678901",
+                    },
+                },
+            }
+        ]
+    }
 
 
 @pytest.fixture
@@ -330,9 +393,9 @@ def invalid_event_name() -> S3Event:
                     "s3SchemaVersion": "1.0",
                     "configurationId": "testConfigRule",
                     "bucket": {
-                        "name": os.getenv("TEST_MOCK_S3_BUCKET_NAME"),
+                        "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
                         "ownerIdentity": {"principalId": "EXAMPLE"},
-                        "arn": f"arn:aws:s3:::{os.getenv("TEST_MOCK_S3_BUCKET_NAME")}",
+                        "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
                     },
                     "object": {
                         "key": f"batch/send/{file_name}",
