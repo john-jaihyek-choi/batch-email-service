@@ -135,7 +135,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 ##### MVP
 
-- [ ] Initial Setup
+- [x] Initial Setup
   - SES Setup
     - [x] verify SES email domain
     - [x] test email sending
@@ -150,6 +150,9 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
       - [x] templates/ prefix
     - [x] asset/ prefix
       - [x] storage for resources in assets/
+    - [x] templates
+      - [x] send batch email lambda templates for admin notification
+      - [ ] process batch email lambda templates for recipient facing email
 - [x] SQS resource provisioning
   - [x] failedEmailBatchQueue (DLQ)
     - [x] max retry configuration (maxReceiveCount)
@@ -158,8 +161,12 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 - [x] SQS producer lambda (sendBatchEmailEvent)
   - [x] Test cases
   - [x] Logic implementation
-    - [x] 50 recipients / message (event)
+    - [x] N recipients / message (SQS message)
+    - [x] SES for failure notification via email using html template (SES)
+    - [ ] Delete/retire fully failed batches in s3
   - [x] CDK Resource provisioning
+    - [x] Lambda execution role and policy settings
+    - [x] Lambda function and configuration
 - [ ] SQS consumer lambda (processBatchEmailEvent)
   - [ ] Test cases
   - [ ] Logic implementation
