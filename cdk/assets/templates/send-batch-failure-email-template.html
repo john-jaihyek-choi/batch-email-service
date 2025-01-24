@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Batch Email Operation Report</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+        color: #333;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background: #ffffff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        background-color: #0073e6;
+        color: #ffffff;
+        padding: 20px;
+        text-align: center;
+      }
+      .content {
+        padding: 20px;
+      }
+      .footer {
+        background-color: #f4f4f4;
+        color: #888;
+        font-size: 12px;
+        text-align: center;
+        padding: 10px 20px;
+      }
+      .attachment-section {
+        margin: 20px 0;
+        padding: 10px;
+        background: #f9f9f9;
+        border-left: 4px solid #0073e6;
+      }
+      .chart-container {
+        text-align: center;
+        margin: 20px 0;
+      }
+      .bar-chart {
+        display: flex; /* Make a flex container */
+        width: 100%;
+        height: 20px;
+        background: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .bar-failed {
+        background: #ff6b6b;
+        width: {{aggregate_error_rate}}%;
+        text-align: left;
+        padding-left: 5px;
+        color: #fff;
+        box-sizing: border-box;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+
+      .bar-success {
+        background: #4caf50;
+        width: {{aggregate_success_rate}}%;
+        text-align: right;
+        padding-right: 5px;
+        color: #fff;
+        box-sizing: border-box;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+
+      .btn {
+        display: inline-block;
+        margin-top: 10px;
+        padding: 10px 20px;
+        background: #0073e6;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 4px;
+      }
+      .btn:hover {
+        background: #005bb5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Batch Email Error Report</h1>
+        <p>Detailed Summary of Recent Operations</p>
+      </div>
+      <div class="content">
+        <h2>Summary</h2>
+        <p>There was an issue processing the following batches:</p>
+        <ul>
+          {{batch_success_details}}
+        </ul>
+
+        <div class="chart-container">
+          <h3>Performance Summary</h3>
+          <div class="bar-chart">
+            <div class="bar-failed" style="width: {{aggregate_error_rate}}%">
+              {{aggregate_error_rate}} Failed
+            </div>
+            <div class="bar-success" style="width: {{aggregate_success_rate}}%">
+              {{aggregate_success_rate}} Success
+            </div>
+          </div>
+        </div>
+
+        <div class="attachment-section">
+          <h3>Attachments</h3>
+          <p>Below are the CSV files containing detailed error logs:</p>
+          <ul>
+            {{attachment_list}}
+          </ul>
+        </div>
+      </div>
+      <div class="footer">
+        <p>This is an automated message. Please do not reply directly.</p>
+        <p>&copy; 2025 Your Company. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
