@@ -66,23 +66,27 @@ def send_sqs_message(
 
 
 def send_email_to_admin(
-    subject: str, body: str, csv_attachments: Dict[str, str] = {}
+    subject: str,
+    body: str,
+    csv_attachments: Dict[str, str] = {},
 ) -> None:
-    msg = MIMEMultipart()
-    msg["From"] = os.getenv("SES_NO_REPLY_SENDER")
-    msg["To"] = os.getenv("SES_ADMIN_EMAIL")
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
-
     try:
+        msg = MIMEMultipart("mixed")
+        msg["From"] = os.getenv("SES_NO_REPLY_SENDER")
+        msg["To"] = os.getenv("SES_ADMIN_EMAIL")
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "html"))
+
         for filename, content in csv_attachments.items():
             part = MIMEBase("application", "octet-stream")
             part.set_payload(content.encode("utf-8"))
             encoders.encode_base64(part)
+            file_name = filename.split("/")[-1]
             part.add_header(
                 "Content-Disposition",
-                f'attachment; filename="{filename.split('/')[-1]}"',
+                f'attachment; filename="{file_name}"',
             )
+            part.add_header("Content-ID", f"<{file_name}>")
             msg.attach(part)
 
         ses.send_raw_email(
