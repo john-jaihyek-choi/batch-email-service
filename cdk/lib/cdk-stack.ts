@@ -120,7 +120,7 @@ export class CdkStack extends cdk.Stack {
           )
         ),
         environment: {
-          SOURCE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
+          BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
         },
         role: sendBatchEmailEventRole,
       }
