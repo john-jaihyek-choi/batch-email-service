@@ -5,23 +5,20 @@ from typing import Dict, Any, List
 from http import HTTPStatus
 from dotenv import load_dotenv
 from collections import OrderedDict
+from pathlib import Path
 from utils import (
     generate_response,
     format_and_filter_targets,
     generate_csv,
-    # generate_html_template,
+    generate_email_template,
     process_targets,
     generate_target_errors_payload,
 )
 from boto3_helper import send_email_to_admin
 
 # for local executions
-try:
-    from dotenv import load_dotenv
-
+if Path(".env").exists():  # .env check for local execution
     load_dotenv()
-except ImportError:
-    pass
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
@@ -50,31 +47,34 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
 
         for target in target_objects:  # open csv target and organize by N batch
             try:
-                logger.info(f"Processing {target}")
+                logger.info(f"Target processing: {json.dumps(target, indent=2)}")
                 batch = process_targets(target)
             except Exception as e:
                 logger.exception(f"Error processing target {target}: {e}")
-                target_error_payload = generate_target_errors_payload(
-                    batch.get("Target"),
-                    str(e),
-                    batch.get("Errors"),
-                    success_rate,
+                target_errors.append(
+                    generate_target_errors_payload(
+                        target=batch.get("Target"),
+                        error_detail=str(e),
+                        error_batch=batch.get("Errors"),
+                        error_count=batch.get("ErrorCount"),
+                        success_count=batch.get("SuccessCount"),
+                    )
                 )
-                target_errors.append(target_error_payload)
 
             # add batch_errors to target_errors if any
-            if batch.get("ErrorCount", 0) > 0:
-                error_count = batch.get("ErrorCount")
-                total_batch_count = error_count + batch.get("SuccessCount", 0)
-                success_rate = round((error_count) / total_batch_count * 100, 2)
+            if batch.get("Errors"):
+                error_count = batch.get("ErrorCount", 0)
+                success_count = batch.get("SuccessCount", 0)
 
-                target_error_payload = generate_target_errors_payload(
-                    batch.get("Target"),
-                    "Error initiating emails",
-                    batch.get("Errors"),
-                    success_rate,
+                target_errors.append(
+                    generate_target_errors_payload(
+                        target=batch.get("Target"),
+                        error_detail="Error initiating emails",
+                        error_batch=batch.get("Errors"),
+                        error_count=error_count,
+                        success_count=success_count,
+                    )
                 )
-                target_errors.append(target_error_payload)
 
             successful_recipients_count += batch.get("SuccessCount", 0)
 
@@ -87,15 +87,25 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
                 csv_content = generate_csv(headers, error.get("Errors"))
                 error_csv[target] = csv_content
 
-            # try:
-            #     html_body = generate_html_template()
-            # except Exception as e:
-            #     logger.exception(f"Error generating html template: {e}")
+            template_bucket = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
+            html_template_key = os.getenv("SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY")
+            text_template_key = os.getenv("SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY")
+
+            # generate html email template
+            html_body = generate_email_template(
+                template_bucket, html_template_key, "html", target_errors
+            )
+
+            # generate text email template (to be attached to the email)
+            text_body = generate_email_template(
+                template_bucket, text_template_key, "text", target_errors
+            )
+            error_csv["plain-text-email"] = text_body
 
             try:
                 send_email_to_admin(
                     "Batch Email Service - Email Delivery Failed",
-                    f"Following csv targets had issues:\n\n -{"\n -".join(filename.split("/")[-1] for filename in error_csv.keys())}\n",
+                    html_body,
                     error_csv,
                 )
             except Exception as e:
