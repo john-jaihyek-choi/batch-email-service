@@ -4,7 +4,7 @@ import logging
 from typing import Dict, Any, List
 from http import HTTPStatus
 from dotenv import load_dotenv
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from pathlib import Path
 from utils import (
     generate_response,
@@ -14,7 +14,7 @@ from utils import (
     process_targets,
     generate_target_errors_payload,
 )
-from boto3_helper import send_email_to_admin
+from boto3_helper import send_email_to_admin, move_s3_objects
 
 # for local executions
 if Path(".env").exists():  # .env check for local execution
@@ -120,6 +120,21 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
                 )
 
             # handle failed batch case
+            try:
+                s3_list = defaultdict(list)
+                for target in target_errors:
+                    source = target["Target"].split("/")
+                    bucket = source[0]
+                    key = "/".join(source[1:])
+                    s3_list[bucket].append({"Key": key})
+
+                move_s3_objects(
+                    bucket_list=s3_list,
+                )
+
+            except Exception as e:
+                logger.exception(f"Error moving s3 objects: {e}")
+
             logger.info("Failed processing the batches")
             return generate_response(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
@@ -144,3 +159,39 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
             message="An error occurred while processing the batch",
         )
+
+
+test = {
+    "Records": [
+        {
+            "eventVersion": "2.0",
+            "eventSource": "aws:s3",
+            "awsRegion": os.getenv("AWS_DEFAULT_REGION"),
+            "eventTime": "1970-01-01T00:00:00.000Z",
+            "eventName": "ObjectCreated:Put",
+            "userIdentity": {"principalId": "EXAMPLE"},
+            "requestParameters": {"sourceIPAddress": "127.0.0.1"},
+            "responseElements": {
+                "x-amz-request-id": "EXAMPLE123456789",
+                "x-amz-id-2": "EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH",
+            },
+            "s3": {
+                "s3SchemaVersion": "1.0",
+                "configurationId": "testConfigRule",
+                "bucket": {
+                    "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
+                    "ownerIdentity": {"principalId": "EXAMPLE"},
+                    "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
+                },
+                "object": {
+                    "key": f"batch/send/missing-required-column.csv",
+                    "size": 1024,
+                    "eTag": "0123456789abcdef0123456789abcdef",
+                    "sequencer": "0A1B2C3D4E5F678901",
+                },
+            },
+        }
+    ]
+}
+
+lambda_handler(test)
