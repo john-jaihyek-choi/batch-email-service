@@ -163,7 +163,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [x] Logic implementation
     - [x] N recipients / message (SQS message)
     - [x] SES for failure notification via email using html template (SES)
-    - [ ] Delete/retire fully failed batches in s3
+    - [x] Delete/retire fully failed batches in s3
   - [x] CDK Resource provisioning
     - [x] Lambda execution role and policy settings
     - [x] Lambda function and configuration
