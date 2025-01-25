@@ -159,39 +159,3 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
             message="An error occurred while processing the batch",
         )
-
-
-test = {
-    "Records": [
-        {
-            "eventVersion": "2.0",
-            "eventSource": "aws:s3",
-            "awsRegion": os.getenv("AWS_DEFAULT_REGION"),
-            "eventTime": "1970-01-01T00:00:00.000Z",
-            "eventName": "ObjectCreated:Put",
-            "userIdentity": {"principalId": "EXAMPLE"},
-            "requestParameters": {"sourceIPAddress": "127.0.0.1"},
-            "responseElements": {
-                "x-amz-request-id": "EXAMPLE123456789",
-                "x-amz-id-2": "EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH",
-            },
-            "s3": {
-                "s3SchemaVersion": "1.0",
-                "configurationId": "testConfigRule",
-                "bucket": {
-                    "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-                    "ownerIdentity": {"principalId": "EXAMPLE"},
-                    "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
-                },
-                "object": {
-                    "key": f"batch/send/missing-required-column.csv",
-                    "size": 1024,
-                    "eTag": "0123456789abcdef0123456789abcdef",
-                    "sequencer": "0A1B2C3D4E5F678901",
-                },
-            },
-        }
-    ]
-}
-
-lambda_handler(test)
