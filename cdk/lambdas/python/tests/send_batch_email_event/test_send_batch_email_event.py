@@ -1,9 +1,10 @@
+import boto3.exceptions
 import pytest
 import os
 import logging
 import json
 import boto3
-from typing import List
+from typing import List, Dict, Any
 from moto import mock_aws
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_s3.client import S3Client
@@ -47,10 +48,19 @@ def test_partial_success(partial_success_event):
 
 
 def test_missing_required_csv_fields(
+    create_mock_s3: S3Client,
     missing_required_csv_field_event: S3Event,
 ) -> None:
     response = lambda_handler(missing_required_csv_field_event, {})
 
+    body = json.loads(response["Body"])
+    failed_batches = body.get("FailedBatches", [])
+
+    object_relocation_successful = failed_s3_object_moved_successfully(
+        s3=create_mock_s3, s3_batches=failed_batches
+    )
+
+    assert object_relocation_successful
     assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
     assert response["Message"] == "Failed processing the batches"
     assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
@@ -407,3 +417,36 @@ def invalid_event_name() -> S3Event:
             }
         ]
     }
+
+
+def failed_s3_object_moved_successfully(
+    s3: S3Client, s3_batches: List[Dict[str, Any]]
+) -> bool:
+    for batch in s3_batches:
+        logger.warning(batch)
+        target_path = batch.get("Target", "").split("/")
+        bucket, key = target_path[0], "/".join(target_path[1:])
+        object = target_path[-1]
+
+        # check source object
+        try:
+            s3.get_object(Bucket=bucket, Key=key)
+            logger.info(f"Source object not deleted successfully - {bucket}/{key}")
+            return False
+        except s3.exceptions.NoSuchKey as e:
+            logger.info(f"No key found in original source - {bucket}/{key}: {e}")
+
+        # check destination object
+        try:
+            new_destination_key = f"{os.getenv("BATCH_ERROR_S3_PREFIX")}/{object}"
+            s3.get_object(Bucket=bucket, Key=new_destination_key)
+            logger.info(
+                f"New key found in destination - {bucket}/{new_destination_key}"
+            )
+        except s3.exceptions.NoSuchKey as e:
+            logger.exception(
+                f"No such key found in new destination - {bucket}/{new_destination_key}: {e}"
+            )
+            return False
+
+    return True
