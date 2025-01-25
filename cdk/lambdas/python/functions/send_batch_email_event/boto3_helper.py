@@ -6,7 +6,7 @@ import boto3
 import boto3.exceptions
 import botocore.exceptions
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, TypedDict, Literal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -20,6 +20,35 @@ aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 sqs = boto3.client("sqs", aws_region)
 s3 = boto3.client("s3", aws_region)
 ses = boto3.client("ses", aws_region)
+
+
+def move_s3_objects(bucket_list: Dict[str, List[Any]]) -> None:
+    # copy the object from source to destination
+    for bucket, objects in bucket_list.items():
+        delete_list = []
+
+        for object in objects:
+            key = object.get("Key")
+            object = key.split("/")[-1]
+            try:
+                s3.copy_object(
+                    Bucket=bucket,
+                    CopySource=f"{bucket}/{key}",
+                    Key=f"{os.getenv("BATCH_ERROR_S3_PREFIX")}/{object}",
+                )
+                delete_list.append({"Key": key})
+            except boto3.exceptions.Boto3Error as e:
+                logger.exception(
+                    f"Boto3 error copying s3 object - {f"{bucket}{key}"}: {e}"
+                )
+        else:
+            # delete the object once copy is complete
+            try:
+                s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_list})
+            except boto3.exceptions.Boto3Error as e:
+                logger.exception(
+                    f"Boto3 error deleting s3 objects - {delete_list}: {e}"
+                )
 
 
 def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
