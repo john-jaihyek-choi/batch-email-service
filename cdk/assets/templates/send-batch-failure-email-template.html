@@ -3,97 +3,125 @@
   <head>
     <title>Batch Email Operation Report</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-        background-color: #f4f4f4;
-        color: #333;
-      }
-      .container {
-        max-width: 600px;
-        margin: 20px auto;
-        background: #ffffff;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      }
-      .header {
-        background-color: #0073e6;
-        color: #ffffff;
-        padding: 20px;
-        text-align: center;
-      }
-      .content {
-        padding: 20px;
-      }
-      .footer {
-        background-color: #f4f4f4;
-        color: #888;
-        font-size: 12px;
-        text-align: center;
-        padding: 10px 20px;
-      }
-      .attachment-section {
-        margin: 20px 0;
-        padding: 10px;
-        background: #f9f9f9;
-        border-left: 4px solid #0073e6;
-      }
-      .chart-container {
-        text-align: center;
-        margin: 20px 0;
-      }
-      .bar-chart {
+        body {
+          font-family: Arial, sans-serif;
+          margin: 0;
+          padding: 0;
+          background-color: #f4f4f4;
+          color: #333;
+        }
+        .container {
+          max-width: 600px;
+          margin: 20px auto;
+          background: #ffffff;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+          background-color: #0073e6;
+          color: #ffffff;
+          padding: 20px;
+          text-align: center;
+        }
+        .content {
+          padding: 20px;
+        }
+        .footer {
+          background-color: #f4f4f4;
+          color: #888;
+          font-size: 12px;
+          text-align: center;
+          padding: 10px 20px;
+        }
+        .attachment-section {
+          margin: 20px 0;
+          padding: 10px;
+          background: #f9f9f9;
+          border-left: 4px solid #0073e6;
+        }
+        .chart-container {
+          text-align: center;
+          margin: 20px 0;
+        }
+        .bar-chart {
+          display: flex;
+          width: 100%;
+          height: 20px;
+          background: #e0e0e0;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .bar-failed {
+          background: #ff6b6b;
+          width: {{aggregate_error_rate}}%;
+          text-align: center;
+          padding-left: 5px;
+          color: #fff;
+          box-sizing: border-box;
+          white-space: nowrap;
+          max-width: 100%;
+        }
+
+        .bar-success {
+          background: #4caf50;
+          width: {{aggregate_success_rate}}%;
+          text-align: center;
+          padding-right: 5px;
+          color: #fff;
+          box-sizing: border-box;
+          white-space: nowrap;
+          max-width: 100%;
+        }
+
+        .btn {
+          display: inline-block;
+          margin-top: 10px;
+          padding: 10px 20px;
+          background: #0073e6;
+          color: #ffffff;
+          text-decoration: none;
+          border-radius: 4px;
+        }
+        .btn:hover {
+          background: #005bb5;
+        }
+        .legend {
         display: flex;
-        width: 100%;
-        height: 20px;
-        background: #e0e0e0;
-        border-radius: 4px;
-        overflow: hidden;
-      }
-
-      .bar-failed {
-        background: #ff6b6b;
-        width: {{aggregate_error_rate}}%;
-        text-align: center;
-        padding-left: 5px;
-        color: #fff;
-        box-sizing: border-box;
-        white-space: nowrap;
-        max-width: 100%;
-      }
-
-      .bar-success {
-        background: #4caf50;
-        width: {{aggregate_success_rate}}%;
-        text-align: center;
-        padding-right: 5px;
-        color: #fff;
-        box-sizing: border-box;
-        white-space: nowrap;
-        max-width: 100%;
-      }
-
-      .btn {
-        display: inline-block;
+        justify-content: center; /* center horizontally */
         margin-top: 10px;
-        padding: 10px 20px;
-        background: #0073e6;
-        color: #ffffff;
-        text-decoration: none;
-        border-radius: 4px;
       }
-      .btn:hover {
-        background: #005bb5;
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 0 10px; /* space between legend items */
+      }
+
+      .legend-color {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 5px;
+        border-radius: 100%;
+      }
+
+      /* Match the bar colors */
+      .legend-color-failed {
+        background-color: #ff6b6b;
+      }
+
+      .legend-color-success {
+        background-color: #4caf50;
       }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="header">
-        <h1>Batch Email Error Report</h1>
-        <p>Detailed Summary of Recent Operations</p>
+        <h1>Batch Initiation Error Report</h1>
+        <p>Detailed Summary of Batch Initiation</p>
       </div>
       <div class="content">
         <h2>Summary</h2>
@@ -107,6 +135,16 @@
           <div class="bar-chart">
             {{aggregate_error_text}} {{aggregate_success_text}}
           </div>
+          <div class="legend">
+            <div class="legend-item">
+              <span class="legend-color legend-color-failed"></span>
+              <span>Failed</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-color-success"></span>
+              <span>Success</span>
+            </div>
+          </div>
         </div>
 
         <div class="attachment-section">
@@ -119,7 +157,7 @@
       </div>
       <div class="footer">
         <p>This is an automated message. Please do not reply directly.</p>
-        <p>&copy; 2025 Your Company. All rights reserved.</p>
+        <p>&copy; 2025 JHC. All rights reserved.</p>
       </div>
     </div>
   </body>
