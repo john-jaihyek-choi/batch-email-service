@@ -99,7 +99,12 @@ export class CdkStack extends cdk.Stack {
     // Custom inline policy for specific needs
     sendBatchEmailEventRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: ["s3:GetObject", "s3:DeleteObject", "s3:CopyObject"],
+        actions: [
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:CopyObject",
+          "s3:PutObject",
+        ],
         resources: [
           `${batchEmailBucket.deployedBucket.bucketArn}/batch/send/*`,
         ],
@@ -121,6 +126,7 @@ export class CdkStack extends cdk.Stack {
         ),
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
+          BATCH_ERROR_S3_PREFIX: "batch/archive/error",
         },
         role: sendBatchEmailEventRole,
       }
