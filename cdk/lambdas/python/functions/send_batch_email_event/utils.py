@@ -166,14 +166,24 @@ def generate_email_template(
         )
 
         replacements = {
-            "{{aggregate_success_rate}}": f"{round(aggregate_success_rate)}",
-            "{{aggregate_error_rate}}": f"{round(aggregate_error_rate)}",
+            "{{aggregate_success_rate}}": (f"{aggregate_success_rate}"),
+            "{{aggregate_error_rate}}": (f"{aggregate_error_rate}"),
+            "{{aggregate_success_text}}": (
+                f'<div class="bar-success" style="width: {aggregate_success_rate}%">{aggregate_success_rate} Success </div>'
+                if aggregate_success_rate
+                else ""
+            ),
+            "{{aggregate_error_text}}": (
+                f'<div class="bar-failed" style="width: {aggregate_error_rate}%">{aggregate_error_rate} Failed </div>'
+                if aggregate_error_rate
+                else ""
+            ),
             "{{attachment_list}}": f"{"".join(attachments)}",
             "{{batch_success_details}}": f"{"".join(batch_success_details)}",
         }
 
         template = re.sub(
-            r"{{(aggregate_success_rate|aggregate_error_rate|attachment_list|batch_success_details)}}",
+            r"{{(aggregate_success_rate|aggregate_error_rate|aggregate_success_text|aggregate_error_text|attachment_list|batch_success_details)}}",
             lambda match: replacements.get(match.group(0), match.group(0)),
             template,
         )
