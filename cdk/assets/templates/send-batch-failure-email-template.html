@@ -105,12 +105,7 @@
         <div class="chart-container">
           <h3>Performance Summary</h3>
           <div class="bar-chart">
-            <div class="bar-failed" style="width: {{aggregate_error_rate}}%">
-              {{aggregate_error_rate}} Failed
-            </div>
-            <div class="bar-success" style="width: {{aggregate_success_rate}}%">
-              {{aggregate_success_rate}} Success
-            </div>
+            {{aggregate_error_text}} {{aggregate_success_text}}
           </div>
         </div>
 
