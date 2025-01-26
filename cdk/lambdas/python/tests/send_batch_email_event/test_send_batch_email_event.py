@@ -438,7 +438,9 @@ def failed_s3_object_moved_successfully(
 
         # check destination object
         try:
-            new_destination_key = f"{os.getenv("BATCH_ERROR_S3_PREFIX")}/{object}"
+            new_destination_key = (
+                f"{os.getenv("BATCH_INITIATION_ERROR_S3_PREFIX")}/{object}"
+            )
             s3.get_object(Bucket=bucket, Key=new_destination_key)
             logger.info(
                 f"New key found in destination - {bucket}/{new_destination_key}"
