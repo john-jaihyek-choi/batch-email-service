@@ -34,7 +34,7 @@ def move_s3_objects(bucket_list: Dict[str, List[Any]]) -> None:
                 s3.copy_object(
                     Bucket=bucket,
                     CopySource=f"{bucket}/{key}",
-                    Key=f"{os.getenv("BATCH_ERROR_S3_PREFIX")}/{object}",
+                    Key=f"{os.getenv("BATCH_INITIATION_ERROR_S3_PREFIX")}/{object}",
                 )
                 delete_list.append({"Key": key})
             except boto3.exceptions.Boto3Error as e:
