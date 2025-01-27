@@ -19,7 +19,7 @@ aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 
 sqs = boto3.client("sqs", aws_region)
 s3 = boto3.client("s3", aws_region)
-ses = boto3.client("ses", aws_region)
+ses = boto3.client("sesv2", aws_region)
 
 
 def move_s3_objects(bucket_list: Dict[str, List[Any]]) -> None:
@@ -106,6 +106,7 @@ def send_email_to_admin(
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
 
+        # attach csv attachments to msg
         for filename, content in csv_attachments.items():
             part = MIMEBase("application", "octet-stream")
             part.set_payload(content.encode("utf-8"))
@@ -118,10 +119,12 @@ def send_email_to_admin(
             part.add_header("Content-ID", f"<{file_name}>")
             msg.attach(part)
 
-        ses.send_raw_email(
-            Source=os.getenv("SES_NO_REPLY_SENDER"),
-            Destinations=os.getenv("SES_ADMIN_EMAIL").split(","),
-            RawMessage={"Data": msg.as_string()},
+        ses.send_email(
+            FromEmailAddress=os.getenv("SES_NO_REPLY_SENDER"),
+            Destination={
+                "ToAddresses": os.getenv("SES_ADMIN_EMAIL").split(","),
+            },
+            Content={"Raw": {"Data": msg.as_string()}},
         )
     except boto3.exceptions.Boto3Error as e:
         logger.error(f"Boto3 error at send_email_to_admin: {e}")
