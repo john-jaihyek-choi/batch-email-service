@@ -104,10 +104,9 @@ export class CdkStack extends cdk.Stack {
           "s3:DeleteObject",
           "s3:CopyObject",
           "s3:PutObject",
+          "ses:SendRawEmail",
         ],
-        resources: [
-          `${batchEmailBucket.deployedBucket.bucketArn}/batch/send/*`,
-        ],
+        resources: [`${batchEmailBucket.deployedBucket.bucketArn}/*`],
       })
     );
 
@@ -127,6 +126,15 @@ export class CdkStack extends cdk.Stack {
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
           BATCH_INITIATION_ERROR_S3_PREFIX: "batch/archive/error",
+          SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY:
+            "templates/send-batch-failure-email-template.html",
+          SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY:
+            "templates/send-batch-failure-email-template.txt",
+          SES_NO_REPLY_SENDER: "no-reply@johnjhc.com",
+          SES_ADMIN_EMAIL: "jchoi950@yahoo.com",
+          EMAIL_BATCH_QUEUE_NAME: emailBatchQueue.queueName,
+          RECIPIENTS_PER_MESSAGE: "50",
+          LOG_LEVEL: "INFO",
         },
         role: sendBatchEmailEventRole,
       }
@@ -204,7 +212,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(sendBatchEmailEvent),
         filters: {
-          prefix: "batch/send/*",
+          prefix: "batch/send/",
           suffix: ".csv",
         },
       },
@@ -212,7 +220,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(scheduleBatchEmail),
         filters: {
-          prefix: "batch/scheduled/*",
+          prefix: "batch/scheduled/",
           suffix: ".csv",
         },
       },
@@ -220,7 +228,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_CREATED,
         getDestination: () => new s3n.LambdaDestination(processSesTemplate),
         filters: {
-          prefix: "templates/*",
+          prefix: "templates/",
           suffix: ".html",
         },
       },
@@ -228,7 +236,7 @@ export class CdkStack extends cdk.Stack {
         eventType: s3.EventType.OBJECT_REMOVED,
         getDestination: () => new s3n.LambdaDestination(processSesTemplate),
         filters: {
-          prefix: "templates/*",
+          prefix: "templates/",
           suffix: ".html",
         },
       },
