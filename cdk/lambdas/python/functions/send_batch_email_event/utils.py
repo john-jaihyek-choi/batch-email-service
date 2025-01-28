@@ -7,16 +7,11 @@ import io
 import re
 from collections import OrderedDict
 from datetime import datetime, timezone
-from pathlib import Path
-from dotenv import load_dotenv
 from typing import Dict, List, Any, Literal
 from boto3_helper import get_s3_object, send_sqs_message
 
-if Path(".env").exists():  # .env check for local execution
-    load_dotenv()
-
-logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 
 # reads a CSV file in batches.
@@ -187,7 +182,7 @@ def generate_email_template(
             lambda match: replacements.get(match.group(0), match.group(0)),
             template,
         )
-        logger.warning(template)
+        logger.debug(template)
         return template
     except Exception as e:
         logger.exception(f"Error generating template: {e}")
@@ -309,7 +304,7 @@ def validate_fields(
     row: Dict[str, Any]
 ) -> Dict[str, Any]:  # Validates a single CSV row.
     try:
-        csv_required_fields = os.getenv("CSV_REQUIRED_FIELDS")
+        csv_required_fields = os.getenv("CSV_REQUIRED_FIELDS", "")
 
         missing_fields = []
 

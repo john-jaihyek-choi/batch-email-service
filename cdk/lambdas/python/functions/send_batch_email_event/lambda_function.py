@@ -3,9 +3,7 @@ import os
 import logging
 from typing import Dict, Any, List
 from http import HTTPStatus
-from dotenv import load_dotenv
 from collections import OrderedDict, defaultdict
-from pathlib import Path
 from utils import (
     generate_response,
     format_and_filter_targets,
@@ -16,12 +14,8 @@ from utils import (
 )
 from boto3_helper import send_email_to_admin, move_s3_objects
 
-# for local executions
-if Path(".env").exists():  # .env check for local execution
-    load_dotenv()
-
-logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 
 def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
