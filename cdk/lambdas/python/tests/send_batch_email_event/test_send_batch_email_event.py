@@ -4,6 +4,7 @@ import os
 import logging
 import json
 import boto3
+from dotenv import load_dotenv
 from typing import List, Dict, Any
 from moto import mock_aws
 from mypy_boto3_sqs.client import SQSClient
@@ -13,7 +14,7 @@ from http import HTTPStatus
 from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL"))
+load_dotenv()
 
 # Restrict external library logs to WARNING due to noise
 hide_logs = ["boto3_helper", "boto3", "urlib3", "botocore"]
@@ -21,6 +22,7 @@ for module in hide_logs:
     logging.getLogger(module).setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 
 # Test Cases
@@ -102,7 +104,6 @@ def test_sent_message_validation(
 def aws_credential_overwrite():
     logger.info("Overwriting environment variables for testing...")
 
-    os.environ["AWS_ACCOUNT_ID"] = "123456789012"
     os.environ["BATCH_EMAIL_SERVICE_BUCKET_NAME"] = "test-mock-s3-bucket"
 
 
@@ -423,7 +424,6 @@ def failed_s3_object_moved_successfully(
     s3: S3Client, s3_batches: List[Dict[str, Any]]
 ) -> bool:
     for batch in s3_batches:
-        logger.warning(batch)
         target_path = batch.get("Target", "").split("/")
         bucket, key = target_path[0], "/".join(target_path[1:])
         object = target_path[-1]
