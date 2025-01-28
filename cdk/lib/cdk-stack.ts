@@ -8,6 +8,9 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as eventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
+import * as dotenv from "dotenv";
+
+dotenv.config();
 
 type S3EventNotificationDestinations =
   | s3n.LambdaDestination
@@ -77,7 +80,7 @@ export class CdkStack extends cdk.Stack {
       {
         destinationBucket: jcBatchEmailServiceBucket,
         sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
-        exclude: ["**/.DS_Store"],
+        exclude: ["**/.DS_Store", "*.DS_Store"],
       }
     );
 
@@ -96,17 +99,18 @@ export class CdkStack extends cdk.Stack {
         "service-role/AWSLambdaBasicExecutionRole"
       )
     );
-    // Custom inline policy for specific needs
+    // S3 policy
     sendBatchEmailEventRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: [
-          "s3:GetObject",
-          "s3:DeleteObject",
-          "s3:CopyObject",
-          "s3:PutObject",
-          "ses:SendRawEmail",
-        ],
+        actions: ["s3:GetObject", "s3:DeleteObject", "s3:PutObject"],
         resources: [`${batchEmailBucket.deployedBucket.bucketArn}/*`],
+      })
+    );
+    // SES policy
+    sendBatchEmailEventRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ses:SendRawEmail"],
+        resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
       })
     );
 
@@ -152,6 +156,9 @@ export class CdkStack extends cdk.Stack {
             "../lambdas/python/functions/process_batch_email_event"
           )
         ),
+        environment: {
+          LOG_LEVEL: "INFO",
+        },
       }
     );
     processBatchEmailEvent.addEventSource(
@@ -172,6 +179,9 @@ export class CdkStack extends cdk.Stack {
             "../lambdas/python/functions/schedule_batch_email"
           )
         ),
+        environment: {
+          LOG_LEVEL: "INFO",
+        },
       }
     );
     scheduleBatchEmail.addToRolePolicy(
@@ -198,6 +208,9 @@ export class CdkStack extends cdk.Stack {
             "../lambdas/python/functions/process_ses_template"
           )
         ),
+        environment: {
+          LOG_LEVEL: "INFO",
+        },
       }
     );
 
