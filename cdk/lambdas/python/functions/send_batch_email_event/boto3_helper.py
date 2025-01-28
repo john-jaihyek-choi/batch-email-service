@@ -1,19 +1,17 @@
 import json
 import os
 import logging
-import io
 import boto3
 import boto3.exceptions
-import botocore.exceptions
 from datetime import datetime
-from typing import Dict, Any, List, TypedDict, Literal
+from typing import Dict, Any, List
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL"))
 logger = logging.getLogger(__name__)
+logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 
