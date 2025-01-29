@@ -304,10 +304,12 @@ def validate_fields(
     row: Dict[str, Any]
 ) -> Dict[str, Any]:  # Validates a single CSV row.
     try:
+        required_fields = os.getenv("EMAIL_REQUIRED_FIELDS")
+
         missing_fields = []
 
-        for field, value in row.items():
-            if not value:
+        for field in required_fields.split(","):
+            if field not in row or not row[field]:
                 missing_fields.append(field)
 
         return {"IsValid": not missing_fields, "MissingFields": missing_fields}
