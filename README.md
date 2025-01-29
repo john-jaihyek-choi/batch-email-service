@@ -79,7 +79,7 @@ Body section for Update -->
 
 ## About The Project
 
-The Batch Email Service is a serverless application that utilizes AWS cloud services such as Lambda, SES, SQS, and CloudWatch where user can send out a batch, templated email, quickly and easily.
+The Batch Email Service is a serverless application that utilizes AWS cloud services such as Lambda, SES, SQS, and DynamoDB where user can send out a batch, templated email, quickly and easily.
 
 This application is being create for a marketing friend of mine who had recently been struggling sending out an his marketing email to a list of recipients. He was actively seeking a software that fufills his needs, but realized that the subcription cost for some of these 3rd party application were ridiculously expensive for such trivial functionality.
 
@@ -95,14 +95,21 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 #### Send Email
 
-- User can send batch email
-- User can schedule a batch email
+- Admin can upload batch email recipients (via AWS console)
+- Admin can upload batch email recipients on schedule (via AWS console)
+
+#### Receive Email
+
+- Admin receives email notification about SendBatchEmailEvent (SQS message queueing) operation failures
+- Admin receives email notification about ProcessBatchEmailEvent (sending email out to recipients) operation failures
+- Admin receives email notification about ProcessSESTemplate (email template upload) operation failures
+- Recipient receives personalized email
 
 #### Manage Template
 
-- User can create a new template
-- User can update an existing template
-- User can delete an existing template
+- Admin can upload a new template
+- Admin can update an existing template
+- Admin can delete an existing template
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -110,10 +117,10 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 ## Architecture Diagram
 
-|              | Languages / Tools / Services                                                                                                                                                     |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Language** | [![Python][Python]][Python-url]                                                                                                                                                  |
-| **Backend**  | [![Lambda][AWSLambda]][AWSLambda-url] [![AWSSES][AWSSES]][AWSSES-url] [![AWSSQS][AWSSQS]][AWSSQS-url] [![S3][S3]][S3-url] [![AWSSNS][AWSSNS]][AWSSNS-url] [![IAM][IAM]][IAM-url] |
+|              | Languages / Tools / Services                                                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Language** | [![Python][Python]][Python-url]                                                                                                                                                        |
+| **Backend**  | [![Lambda][AWSLambda]][AWSLambda-url] [![AWSSES][AWSSES]][AWSSES-url] [![AWSSQS][AWSSQS]][AWSSQS-url] [![S3][S3]][S3-url] [![DynamoDB][DynamoDB]][DynamoDB-url] [![IAM][IAM]][IAM-url] |
 
 <p align="center">
   <img src="images/architecture-diagram.png" alt="Description">
@@ -158,7 +165,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [x] max retry configuration (maxReceiveCount)
   - [x] emailBatchQueue
     - [x] configure visibility timeout (default 30sec)
-- [x] SQS producer lambda (sendBatchEmailEvent)
+- [x] SQS producer lambda (SendBatchEmailEvent)
   - [x] Test cases
   - [x] Logic implementation
     - [x] N recipients / message (SQS message)
@@ -167,26 +174,29 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [x] CDK Resource provisioning
     - [x] Lambda execution role and policy settings
     - [x] Lambda function and configuration
+- [ ] Template processor Lambda (ProcessSESTemplate)
+  - [ ] Test cases
+  - [ ] Logic implementation
+    - [ ] s3 event for CREATE/PUT and DELETE
+    - [ ] scan template content and collect dynamic variables
+    - [ ] create/update/delete template metadata to ddb
+  - [ ] CDK Resource provisioning
+    - [ ] Lambda execution role and policy setting
+    - [ ] Lambda function and configuration
 - [ ] SQS consumer lambda (processBatchEmailEvent)
   - [ ] Test cases
   - [ ] Logic implementation
-    - [ ] send batch email via SES
+    - [ ] send email via SES
+    - [ ] SES for failure notification via email using html template (SES)
     - [ ] archive s3 object upon successful processing
   - [ ] CDK Resource provisioning
     - [ ] add event source as emailBatchQueue
     - [ ] reserved concurrency
-- [ ] Schedule Email Batch Lambda (scheduleBatchEmailEvent)
+- [ ] Schedule Email Batch Lambda (ScheduleBatchEmailEvent)
   - [ ] Test cases
   - [ ] Logic implementation
     - [ ] create event bridge schedule with sendBatchEmailEvent as a target
     - [ ] Event bridge InputTransformer to transform event payload for sendBatchEmailEvent
-  - [ ] CDK Resource provisioning
-- [ ] Template processor Lambda (processSesTemplate)
-  - [ ] Test cases
-  - [ ] Logic implementation
-    - [ ] s3 event for PUT and DELETE
-    - [ ] html minifier and stringify
-    - [ ] create/upload or delete from SES template
   - [ ] CDK Resource provisioning
 - [ ] Recipient Management Template
   - [ ] create CSV template with necessary recipient fields
@@ -328,6 +338,19 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
 
 ## Development Note
 
+#### SES Templated Email Limitation:
+
+- Issue:
+  - My original plan for sending an email was using the templated email API to send dynamically fill in variables in the template.
+    - However, this came with one main limitation - [inability to attach external files](https://docs.aws.amazon.com/ses/latest/dg/send-email-raw.html).
+- Workaround:
+  - Due to such limitation, the workaround was sending raw email rather than templated email.
+    - General approach:
+      - s3 to store email templates
+      - get the template stored in s3 from consumer/producer lambda
+      - substitute dynamic variables in the template with meaningful data
+      - build MIME and attach the template along with any attachment files needed (ie csv file)
+
 #### Cost Analysis:
 
 - Main point of discussion:
@@ -432,7 +455,7 @@ Project Link: [https://github.com/john-jaihyek-choi/batch-email-service](https:/
 
 ## Acknowledgments
 
-List of resources found helpful during development
+List of resources found valuable for development
 
 - [Best practices for sending email using Amazon SES](https://docs.aws.amazon.com/ses/latest/dg/best-practices.html)
 - [Sending test emails in Amazon SES with the simulator](https://docs.aws.amazon.com/ses/latest/dg/send-an-email-from-console.html#send-test-email)
