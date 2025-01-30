@@ -1,9 +1,8 @@
 import json
 import os
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any
 from http import HTTPStatus
-from collections import OrderedDict, defaultdict
 from utils import generate_response
 from processor import process_event
 
