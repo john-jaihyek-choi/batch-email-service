@@ -3,8 +3,9 @@ import os
 import logging
 import boto3
 import boto3.exceptions
+from collections import defaultdict
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -20,33 +21,35 @@ s3 = boto3.client("s3", aws_region)
 ses = boto3.client("sesv2", aws_region)
 
 
-def move_s3_objects(bucket_list: Dict[str, List[Any]]) -> None:
+def move_s3_objects(
+    targets: List[Dict[Literal["From", "To"], Dict[Literal["Bucket", "Key"], str]]]
+) -> None:
     # copy the object from source to destination
-    for bucket, objects in bucket_list.items():
-        delete_list = []
+    delete_list = defaultdict(list)
 
-        for object in objects:
-            key = object.get("Key")
-            object = key.split("/")[-1]
-            try:
-                s3.copy_object(
-                    Bucket=bucket,
-                    CopySource=f"{bucket}/{key}",
-                    Key=f"{os.getenv("BATCH_INITIATION_ERROR_S3_PREFIX")}/{object}",
-                )
-                delete_list.append({"Key": key})
-            except boto3.exceptions.Boto3Error as e:
-                logger.exception(
-                    f"Boto3 error copying s3 object - {f"{bucket}{key}"}: {e}"
-                )
-        else:
-            # delete the object once copy is complete
-            try:
-                s3.delete_objects(Bucket=bucket, Delete={"Objects": delete_list})
-            except boto3.exceptions.Boto3Error as e:
-                logger.exception(
-                    f"Boto3 error deleting s3 objects - {delete_list}: {e}"
-                )
+    logger.info("copying targets...")
+    for target in targets:
+        source, destination = target["From"], target["To"]
+
+        try:
+            s3.copy_object(
+                Bucket=destination["Bucket"],
+                CopySource=source,
+                Key=destination["Key"],
+            )
+            delete_list[source["Bucket"]].append({"Key": source["Key"]})
+        except boto3.exceptions.Boto3Error as e:
+            logger.exception(f"Boto3 error copying s3 object - {target}: {e}")
+
+    logger.info("cleaning up source objects...")
+    # delete the object once copy is complete
+    for bucket, deleting_objects in delete_list.items():
+        try:
+            s3.delete_objects(Bucket=bucket, Delete={"Objects": deleting_objects})
+        except boto3.exceptions.Boto3Error as e:
+            logger.exception(
+                f"Boto3 error deleting s3 objects - {deleting_objects}: {e}"
+            )
 
 
 def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
@@ -58,54 +61,42 @@ def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
 
 
 def send_sqs_message(
-    batch_id: str,
-    timestamp: datetime,
-    batch_number: int,
-    principal_id: str,
-    recipient_batch: List[Dict[str, Any]],
+    queue_name: str,
+    message_body: Any,
 ) -> Dict[Any, Any]:
-    queue_name = os.getenv("EMAIL_BATCH_QUEUE_NAME")
-
     try:
         logger.info("processing sqs message...")
 
-        message = {
-            "BatchId": batch_id,
-            "Recipients": recipient_batch,
-            "Metadata": {"UploadedBy": principal_id, "Timestamp": timestamp},
-        }
-
-        logger.debug(f"sending batch {batch_number}...")
-
         queue_url = sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
-        response = sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(message))
-
-        logger.debug(
-            f"batch {batch_number} successfully sent: {
-                     json.dumps(message)}"
+        response = sqs.send_message(
+            QueueUrl=queue_url, MessageBody=json.dumps(message_body)
         )
+
+        logger.debug(f"message successfully sent to {queue_name}: {message_body}")
 
         return response
 
     except boto3.exceptions.Boto3Error as e:
-        logger.error(f"Boto3 error at send_sqs_message {batch_id}: {e}")
+        logger.error(f"Boto3 error at send_sqs_message {message_body}: {e}")
         raise
 
 
-def send_email_to_admin(
+def send_ses_email(
+    send_from: str,
+    send_to: str,
     subject: str,
     body: str,
-    csv_attachments: Dict[str, str] = {},
+    attachments: Dict[str, str] = {},
 ) -> None:
     try:
         msg = MIMEMultipart("mixed")
-        msg["From"] = os.getenv("SES_NO_REPLY_SENDER")
-        msg["To"] = os.getenv("SES_ADMIN_EMAIL")
+        msg["From"] = send_from
+        msg["To"] = send_to
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "html"))
 
         # attach csv attachments to msg
-        for filename, content in csv_attachments.items():
+        for filename, content in attachments.items():
             part = MIMEBase("application", "octet-stream")
             part.set_payload(content.encode("utf-8"))
             encoders.encode_base64(part)
@@ -118,9 +109,9 @@ def send_email_to_admin(
             msg.attach(part)
 
         ses.send_email(
-            FromEmailAddress=os.getenv("SES_NO_REPLY_SENDER"),
+            FromEmailAddress=send_from,
             Destination={
-                "ToAddresses": os.getenv("SES_ADMIN_EMAIL").split(","),
+                "ToAddresses": send_to.split(","),
             },
             Content={"Raw": {"Data": msg.as_string()}},
         )
