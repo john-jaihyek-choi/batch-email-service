@@ -268,12 +268,20 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
 
             try:
                 if batch:
+                    message = {
+                        "BatchId": batch_id,
+                        "Recipients": batch,
+                        "Metadata": {
+                            "UploadedBy": principal_id,
+                            "Timestamp": timestamp,
+                        },
+                    }
+
+                    logger.debug(f"sending batch {batch_number}...")
+
                     send_sqs_message(
-                        batch_id,
-                        timestamp,
-                        batch_number,
-                        principal_id,
-                        batch,
+                        queue_name=os.getenv("EMAIL_BATCH_QUEUE_NAME"),
+                        message_body=message,
                     )
             except Exception as e:
                 logger.exception(
