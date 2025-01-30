@@ -4,7 +4,6 @@ import logging
 import boto3
 import boto3.exceptions
 from collections import defaultdict
-from datetime import datetime
 from typing import Dict, Any, List, Literal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
