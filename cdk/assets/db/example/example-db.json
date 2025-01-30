@@ -1,0 +1,10 @@
+[
+    {
+        "template_key": {
+            "S": "templates/send-batch-failure-email-template.html"
+        },
+        "fields": {
+            "S": "aggregate_error_rate,aggregate_success_rate,batch_success_details,aggregate_error_text,aggregate_success_text,attachment_list"
+        }
+    }
+]
