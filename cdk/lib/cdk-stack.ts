@@ -139,6 +139,7 @@ export class CdkStack extends cdk.Stack {
           EMAIL_BATCH_QUEUE_NAME: emailBatchQueue.queueName,
           RECIPIENTS_PER_MESSAGE: "50",
           LOG_LEVEL: "INFO",
+          EMAIL_REQUIRED_FIELDS: process.env.EMAIL_REQUIRED_FIELDS!,
         },
         role: sendBatchEmailEventRole,
       }
