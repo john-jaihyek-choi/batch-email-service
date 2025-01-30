@@ -171,6 +171,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [x] N recipients / message (SQS message)
     - [x] SES for failure notification via email using html template (SES)
     - [x] Delete/retire fully failed batches in s3
+    - [ ] LRU caching for template-specific field DDB lookups
   - [x] CDK Resource provisioning
     - [x] Lambda execution role and policy settings
     - [x] Lambda function and configuration
@@ -181,12 +182,15 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [ ] scan template content and collect dynamic variables
     - [ ] create/update/delete template metadata to ddb
   - [ ] CDK Resource provisioning
+    - [ ] DDB table creation
     - [ ] Lambda execution role and policy setting
     - [ ] Lambda function and configuration
 - [ ] SQS consumer lambda (processBatchEmailEvent)
   - [ ] Test cases
   - [ ] Logic implementation
     - [ ] send email via SES
+      - [ ] handle single and multiple send_to list
+      - [ ] implement lru caching for template s3 lookup to minimize api calls
     - [ ] SES for failure notification via email using html template (SES)
     - [ ] archive s3 object upon successful processing
   - [ ] CDK Resource provisioning
