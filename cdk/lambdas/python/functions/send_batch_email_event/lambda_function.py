@@ -12,7 +12,7 @@ from utils import (
     process_targets,
     generate_target_errors_payload,
 )
-from boto3_helper import send_email_to_admin, move_s3_objects
+from boto3_helper import send_ses_email, move_s3_objects
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
@@ -73,13 +73,13 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
             successful_recipients_count += batch.get("SuccessCount", 0)
 
         if target_errors:  # handle response with target errors
-            error_csv: Dict[str, str] = OrderedDict()
+            attachments: Dict[str, str] = OrderedDict()
 
             for error in target_errors:  # generate unique csv per target error
                 headers = error.get("Errors")[0].keys()
                 target = error.get("Target")
                 csv_content = generate_csv(headers, error.get("Errors"))
-                error_csv[target] = csv_content
+                attachments[target] = csv_content
 
             template_bucket = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
             html_template_key = os.getenv("SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY")
@@ -94,13 +94,15 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
             text_body = generate_email_template(
                 template_bucket, text_template_key, "text", target_errors
             )
-            error_csv["plain-text-email"] = text_body
+            attachments["plain-text-email"] = text_body
 
             try:
-                send_email_to_admin(
-                    "Batch Email Service - Email Delivery Failed",
-                    html_body,
-                    error_csv,
+                send_ses_email(
+                    send_from=os.getenv("SES_NO_REPLY_SENDER"),
+                    send_to=os.getenv("SES_ADMIN_EMAIL"),
+                    subject="Batch Email Service - Email Initiation Failed",
+                    body=html_body,
+                    attachments=attachments,
                 )
             except Exception as e:
                 logger.error(f"Error at send_email_to_admin: {e}")
@@ -115,15 +117,28 @@ def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
 
             # handle failed batch case
             try:
-                s3_list = defaultdict(list)
+                s3_list = []
                 for target in target_errors:
                     source = target["Target"].split("/")
-                    bucket = source[0]
-                    key = "/".join(source[1:])
-                    s3_list[bucket].append({"Key": key})
+                    bucket, file_name = source[0], source[-1]
 
+                    key = "/".join(source[1:])
+                    s3_list.append(
+                        {
+                            "From": {
+                                "Bucket": bucket,
+                                "Key": key,
+                            },
+                            "To": {
+                                "Bucket": bucket,
+                                "Key": f"{os.getenv("BATCH_INITIATION_ERROR_S3_PREFIX")}/{file_name}",
+                            },
+                        }
+                    )
+
+                logger.info(f"Moving s3 objects: {s3_list}")
                 move_s3_objects(
-                    bucket_list=s3_list,
+                    targets=s3_list,
                 )
 
             except Exception as e:
