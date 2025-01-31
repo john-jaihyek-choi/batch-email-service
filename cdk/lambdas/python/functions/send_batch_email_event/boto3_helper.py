@@ -3,6 +3,8 @@ import os
 import logging
 import boto3
 import boto3.exceptions
+from botocore.exceptions import ClientError
+from config import config
 from collections import defaultdict
 from typing import Dict, Any, List, Literal
 from email.mime.multipart import MIMEMultipart
@@ -11,13 +13,42 @@ from email.mime.base import MIMEBase
 from email import encoders
 
 logger = logging.getLogger(__name__)
-logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
+logger.setLevel(config.LOG_LEVEL)
 
-aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
+aws_region = config.AWS_DEFAULT_REGION
 
 sqs = boto3.client("sqs", aws_region)
 s3 = boto3.client("s3", aws_region)
 ses = boto3.client("sesv2", aws_region)
+ddb = boto3.client("dynamodb", aws_region)
+
+
+def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
+    try:
+        return s3.get_object(Bucket=bucket_name, Key=object_key)
+    except s3.exceptions.NoSuchBucket:
+        logger.exception(f"No bucket with name {bucket_name}")
+        raise
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 library error: {e}")
+        raise
+
+
+def get_ddb_item(table_name: str, pk: str) -> Dict[Any, Any]:
+    try:
+        return ddb.get_item(TableName=table_name, Key={"template_key": {"S": pk}})
+    except ddb.exceptions.ResourceNotFoundException:
+        logger.exception(f"No item with key {pk} found")
+        raise
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 library error: {e}")
+        raise
 
 
 def move_s3_objects(
@@ -37,26 +68,16 @@ def move_s3_objects(
                 Key=destination["Key"],
             )
             delete_list[source["Bucket"]].append({"Key": source["Key"]})
-        except boto3.exceptions.Boto3Error as e:
-            logger.exception(f"Boto3 error copying s3 object - {target}: {e}")
+        except Exception as e:
+            logger.exception(f"Error copying s3 object - {target}: {e}")
 
     logger.info("cleaning up source objects...")
     # delete the object once copy is complete
     for bucket, deleting_objects in delete_list.items():
         try:
             s3.delete_objects(Bucket=bucket, Delete={"Objects": deleting_objects})
-        except boto3.exceptions.Boto3Error as e:
-            logger.exception(
-                f"Boto3 error deleting s3 objects - {deleting_objects}: {e}"
-            )
-
-
-def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
-    try:
-        return s3.get_object(Bucket=bucket_name, Key=object_key)
-
-    except boto3.exceptions.Boto3Error as e:
-        logger.exception(f"Boto3 error at get_s3_object: {e}")
+        except Exception as e:
+            logger.exception(f"Error deleting s3 objects - {deleting_objects}: {e}")
 
 
 def send_sqs_message(
@@ -75,6 +96,9 @@ def send_sqs_message(
 
         return response
 
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
     except boto3.exceptions.Boto3Error as e:
         logger.error(f"Boto3 error at send_sqs_message {message_body}: {e}")
         raise
@@ -114,5 +138,7 @@ def send_ses_email(
             },
             Content={"Raw": {"Data": msg.as_string()}},
         )
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
     except boto3.exceptions.Boto3Error as e:
         logger.error(f"Boto3 error at send_email_to_admin: {e}")
