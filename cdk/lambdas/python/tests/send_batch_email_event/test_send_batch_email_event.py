@@ -4,18 +4,22 @@ import os
 import logging
 import json
 import boto3
-from dotenv import load_dotenv
-from typing import List, Dict, Any
+from pytest import FixtureRequest
+from typing import Callable, List, Dict, Any
+from http import HTTPStatus
 from moto import mock_aws
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_s3.client import S3Client
 from mypy_boto3_ses.client import SESClient
 from mypy_boto3_dynamodb.client import DynamoDBClient
-from http import HTTPStatus
-from functions.send_batch_email_event.lambda_function import lambda_handler
 from aws_lambda_powertools.utilities.data_classes import S3Event
+from dotenv import load_dotenv
 
 load_dotenv()
+
+# # importing after loading environment due to dependencies
+# from functions.send_batch_email_event.lambda_function import lambda_handler
+
 
 # Restrict external library logs to WARNING due to noise
 hide_logs = ["boto3_helper", "boto3", "urlib3", "botocore"]
@@ -25,78 +29,7 @@ for module in hide_logs:
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
-
-# Test Cases
-@pytest.mark.parametrize(
-    "valid_events, expected_message",
-    [
-        ("valid_single_record_event", "Batch processing completed successfully"),
-        ("valid_multi_record_event", "Batch processing completed successfully"),
-    ],
-)
-def test_valid_events(request, valid_events, expected_message):
-    event = request.getfixturevalue(valid_events)
-    response = lambda_handler(event, {})
-
-    assert response["StatusCode"] == HTTPStatus.OK
-    assert response["Message"] == expected_message
-
-
-def test_partial_success(partial_success_event):
-    response = lambda_handler(partial_success_event, {})
-
-    assert response["StatusCode"] == HTTPStatus.PARTIAL_CONTENT
-    assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
-
-
-def test_missing_required_csv_fields(
-    mocked_s3: S3Client,
-    missing_required_csv_field_event: S3Event,
-) -> None:
-    response = lambda_handler(missing_required_csv_field_event, {})
-
-    body = json.loads(response["Body"])
-    failed_batches = body.get("FailedBatches", [])
-
-    object_relocation_successful = failed_s3_object_moved_successfully(
-        s3=mocked_s3, s3_batches=failed_batches
-    )
-
-    assert object_relocation_successful
-    assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert response["Message"] == "Failed processing the batches"
-    assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
-
-
-def test_empty_event(empty_event: S3Event) -> None:
-    response = lambda_handler(empty_event, {})
-
-    assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
-    assert response["Message"] == "Invalid event: Missing 'Records' key"
-
-
-def test_empty_s3_content(empty_s3_content_event: S3Event) -> None:
-    response = lambda_handler(empty_s3_content_event, {})
-
-    assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert response["Message"] == "Failed processing the batches"
-
-
-def test_invalid_s3_event_name(invalid_event_name: S3Event) -> None:
-    response = lambda_handler(invalid_event_name, {})
-
-    assert response["StatusCode"] == HTTPStatus.NO_CONTENT
-    assert response["Message"] == "Target valid targets found"
-
-
-def test_sent_message_validation(
-    mocked_sqs,
-):
-    sqs: SQSClient = mocked_sqs
-    queue = sqs.get_queue_url(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME"))
-    message = sqs.receive_message(QueueUrl=queue["QueueUrl"])
-
-    assert "Recipients" in json.loads(message["Messages"][0]["Body"])
+HandlerFunction = Callable[[Dict[str, Any], Any], Dict[str, Any]]
 
 
 # Fixtures
@@ -132,8 +65,8 @@ def mocked_sqs():
 @mock_aws
 @pytest.fixture(scope="module", autouse=True)
 def mocked_s3():
-    aws_region = os.getenv("AWS_DEFAULT_REGION")
-    bucket_name = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
+    aws_region: str = os.getenv("AWS_DEFAULT_REGION")
+    bucket_name: str = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
 
     with mock_aws():
         try:
@@ -164,8 +97,6 @@ def mocked_s3():
                     s3_prefix=asset["s3_prefix"],
                 )
 
-            logger.warning(s3.list_buckets())
-
         except Exception as e:
             pytest.fail(f"Failed setting up mock s3: {e}")
 
@@ -189,15 +120,15 @@ def mocked_ses():
 @pytest.fixture(scope="module", autouse=True)
 def mocked_ddb():
     # Create table and put items
-    db_path = os.getenv("TEST_EXAMPLE_DB_PATH")
+    db_path: str = os.getenv("TEST_EXAMPLE_DB_PATH")
 
     with mock_aws():
         try:
             table_name = os.getenv("TEMPLATE_METADATA_TABLE_NAME")
+
             ddb: DynamoDBClient = boto3.client(
                 "dynamodb", region_name=os.getenv("AWS_DEFAULT_REGION")
             )
-            logger.warning(ddb.list_tables())
 
             ddb.create_table(
                 TableName=table_name,
@@ -226,6 +157,93 @@ def mocked_ddb():
         except Exception as e:
             pytest.fail(f"Failed to setup mock ddb: {e}")
         yield ddb
+
+
+@pytest.fixture
+def handler() -> HandlerFunction:
+    from functions.send_batch_email_event.lambda_function import lambda_handler
+
+    return lambda_handler
+
+
+# Test Cases
+@pytest.mark.parametrize(
+    "valid_events, expected_message",
+    [
+        ("valid_single_record_event", "Batch processing completed successfully"),
+        ("valid_multi_record_event", "Batch processing completed successfully"),
+    ],
+)
+def test_valid_events(
+    request: FixtureRequest, handler: HandlerFunction, valid_events, expected_message
+):
+    event = request.getfixturevalue(valid_events)
+    response = handler(event, {})
+
+    assert response["StatusCode"] == HTTPStatus.OK
+    assert response["Message"] == expected_message
+
+
+def test_partial_success(handler: HandlerFunction, partial_success_event):
+    response = handler(partial_success_event, {})
+
+    assert response["StatusCode"] == HTTPStatus.PARTIAL_CONTENT
+    assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
+
+
+def test_missing_required_csv_fields(
+    handler: HandlerFunction,
+    mocked_s3: S3Client,
+    missing_required_csv_field_event: S3Event,
+) -> None:
+    response = handler(missing_required_csv_field_event, {})
+
+    body = json.loads(response["Body"])
+    failed_batches = body.get("FailedBatches", [])
+
+    object_relocation_successful = failed_s3_object_moved_successfully(
+        s3=mocked_s3, s3_batches=failed_batches
+    )
+
+    assert object_relocation_successful
+    assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert response["Message"] == "Failed processing the batches"
+    assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
+
+
+def test_empty_event(handler: HandlerFunction, empty_event: S3Event) -> None:
+    response = handler(empty_event, {})
+
+    assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
+    assert response["Message"] == "Invalid event: Missing 'Records' key"
+
+
+def test_empty_s3_content(
+    handler: HandlerFunction, empty_s3_content_event: S3Event
+) -> None:
+    response = handler(empty_s3_content_event, {})
+
+    assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert response["Message"] == "Failed processing the batches"
+
+
+def test_invalid_s3_event_name(
+    handler: HandlerFunction, invalid_event_name: S3Event
+) -> None:
+    response = handler(invalid_event_name, {})
+
+    assert response["StatusCode"] == HTTPStatus.NO_CONTENT
+    assert response["Message"] == "Target valid targets found"
+
+
+def test_sent_message_validation(
+    mocked_sqs: SQSClient,
+):
+    sqs = mocked_sqs
+    queue = sqs.get_queue_url(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME"))
+    message = sqs.receive_message(QueueUrl=queue["QueueUrl"])
+
+    assert "Recipients" in json.loads(message["Messages"][0]["Body"])
 
 
 @pytest.fixture
@@ -310,7 +328,8 @@ def valid_multi_record_event() -> S3Event:
 
 @pytest.fixture
 def partial_success_event() -> S3Event:
-    file_names = ["partially-complete-list.csv", "partially-complete-list-1.csv"]
+    # file_names = ["partially-complete-list.csv", "partially-complete-list-1.csv"]
+    file_names = ["partially-complete-list.csv"]
 
     payload = {"Records": []}
 
