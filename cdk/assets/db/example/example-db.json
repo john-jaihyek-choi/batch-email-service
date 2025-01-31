@@ -6,5 +6,21 @@
         "fields": {
             "S": "aggregate_error_rate,aggregate_success_rate,batch_success_details,aggregate_error_text,aggregate_success_text,attachment_list"
         }
+    },
+    {
+        "template_key": {
+            "S": "templates/send-batch-failure-email-template.txt"
+        },
+        "fields": {
+            "S": "batch_success_details,aggregate_error_rate,aggregate_success_rate,attachment_list"
+        }
+    },
+    {
+        "template_key": {
+            "S": "templates/post-card-combined-template.html"
+        },
+        "fields": {
+            "S": ""
+        }
     }
 ]
