@@ -1,13 +1,13 @@
 import json
-import os
 import logging
+from config import config
 from typing import Dict, Any
 from http import HTTPStatus
 from utils import generate_response
 from processor import process_event
 
 logger = logging.getLogger(__name__)
-logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
+logger.setLevel(config.LOG_LEVEL)
 
 
 def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
