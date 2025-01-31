@@ -5,13 +5,14 @@ import os
 import csv
 import io
 import re
+from config import config
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Literal
-from boto3_helper import get_s3_object, send_sqs_message
+from boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
 
 logger = logging.getLogger(__name__)
-logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
+logger.setLevel(config.LOG_LEVEL)
 
 
 # reads a CSV file in batches.
@@ -33,30 +34,36 @@ def batch_read_csv(file_obj, batch_size: int):
             continue
 
         try:
-            validate_result = validate_fields(row)
-
             custom_fields = {"row_number": row_number}
-
             row_info = OrderedDict({**custom_fields, **row})
 
-            if validate_result["IsValid"]:
-                batch.append(row_info)
-            else:
+            missing_fields = validate_row(row)
+
+            if missing_fields:  # append error message to row_errors
                 row_errors.append(
                     OrderedDict(
                         {
                             **row_info,
                             "Error": (
                                 "Missing required fields"
-                                if validate_result.get("MissingFields")
+                                if missing_fields
                                 else "Unidentified Error - Seek admin assistance"
                             ),
-                            "MissingFields": validate_result.get("MissingFields"),
+                            "MissingFields": missing_fields,
                         }
                     )
                 )
+            else:
+                batch.append(row_info)
         except Exception as e:
-            row_errors.append(OrderedDict({**row_info, "Error": "Unidentified error"}))
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                row_errors.append(
+                    OrderedDict({**row_info, "Error": f"Template does not exist {e}"})
+                )
+            else:
+                row_errors.append(
+                    OrderedDict({**row_info, "Error": f"Unidentified error {e}"})
+                )
             continue
 
         if len(batch) == batch_size:
@@ -237,7 +244,7 @@ def generate_batch_payload(
 
 def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
     try:
-        recipients_per_message = int(os.getenv("RECIPIENTS_PER_MESSAGE", 50))
+        recipients_per_message = config.RECIPIENTS_PER_MESSAGE
 
         batch_errors, success_count = [], 0
 
@@ -280,7 +287,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
                     logger.debug(f"sending batch {batch_number}...")
 
                     send_sqs_message(
-                        queue_name=os.getenv("EMAIL_BATCH_QUEUE_NAME"),
+                        queue_name=config.EMAIL_BATCH_QUEUE_NAME,
                         message_body=message,
                     )
             except Exception as e:
@@ -308,21 +315,47 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
         )
 
 
-def validate_fields(
-    row: Dict[str, Any]
-) -> Dict[str, Any]:  # Validates a single CSV row.
+def validate_row(row: Dict[str, Any]) -> Dict[str, Any]:  # Validates a single CSV row.
+    missing_fields = validate_basic_fields(row, config.EMAIL_REQUIRED_FIELDS)
+
+    if not missing_fields:
+        missing_template_fields = validate_template_fields(
+            row, config.TEMPLATE_METADATA_TABLE_NAME
+        )
+        missing_fields.extend(missing_template_fields)
+
+    return missing_fields
+
+
+def validate_template_fields(row: Dict[str, Any], ddb_table_name) -> List[str]:
+    template_key = row.get("email_template")
+    missing = []
+
     try:
-        required_fields = os.getenv("EMAIL_REQUIRED_FIELDS")
-
-        missing_fields = []
-
-        for field in required_fields.split(","):
-            if field not in row or not row[field]:
-                missing_fields.append(field)
-
-        return {"IsValid": not missing_fields, "MissingFields": missing_fields}
+        response: Dict[str, Any] = get_ddb_item(ddb_table_name, template_key)
     except Exception as e:
-        logger.exception(f"Error validating row: {e}")
-        return {
-            "IsValid": False,
-        }
+        logger.exception(f"Unexpected error with get_ddb_item: {e}")
+        raise
+
+    ddb_item: Dict[str, Dict[str, str]] = response.get("Item")
+
+    # check ddb_item is valid, fields column is valid, and field is non-empty
+    if ddb_item and ddb_item["fields"] and ddb_item["fields"]["S"]:
+        fields = ddb_item.get("fields")["S"]
+        for field in fields.split(","):
+            field = field.strip()
+            if field not in row or not row[field]:
+                missing.append(field)
+
+    return missing
+
+
+def validate_basic_fields(row: Dict[str, Any], required_fields: List[str]) -> List[str]:
+    missing = []
+
+    for field in required_fields:
+        field = field.strip()
+        if field not in row or not row[field]:
+            missing.append(field)
+
+    return missing
