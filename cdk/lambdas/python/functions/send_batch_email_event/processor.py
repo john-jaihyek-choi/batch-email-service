@@ -1,6 +1,7 @@
 import json
 import os
 import logging
+from config import config
 from typing import Dict, Any, List
 from http import HTTPStatus
 from collections import OrderedDict
@@ -15,7 +16,7 @@ from utils import (
 from boto3_helper import send_ses_email, move_s3_objects
 
 logger = logging.getLogger(__name__)
-logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
+logger.setLevel(config.LOG_LEVEL)
 
 
 def process_event(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -79,9 +80,9 @@ def handle_target_errors(
         csv_content = generate_csv(headers, error.get("Errors"))
         attachments[target] = csv_content
 
-    template_bucket = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
-    html_template_key = os.getenv("SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY")
-    text_template_key = os.getenv("SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY")
+    template_bucket = config.BATCH_EMAIL_SERVICE_BUCKET_NAME
+    html_template_key = config.SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY
+    text_template_key = config.SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY
 
     # generate html email template
     html_body = generate_email_template(
@@ -94,16 +95,13 @@ def handle_target_errors(
     )
     attachments["plain-text-email"] = text_body
 
-    try:
-        send_ses_email(
-            send_from=os.getenv("SES_NO_REPLY_SENDER"),
-            send_to=os.getenv("SES_ADMIN_EMAIL"),
-            subject="Batch Email Service - Email Initiation Failed",
-            body=html_body,
-            attachments=attachments,
-        )
-    except Exception as e:
-        logger.error(f"Error at send_email_to_admin: {e}")
+    send_ses_email(
+        send_from=config.SES_NO_REPLY_SENDER,
+        send_to=config.SES_ADMIN_EMAIL,
+        subject="Batch Email Service - Email Initiation Failed",
+        body=html_body,
+        attachments=attachments,
+    )
 
     if successful_recipients_count:  # handle partial success case
         logger.info("partially processed the batches")
@@ -140,7 +138,7 @@ def move_failed_objects(target_errors: List[Dict[str, Any]]):
                     },
                     "To": {
                         "Bucket": bucket,
-                        "Key": f"{os.getenv("BATCH_INITIATION_ERROR_S3_PREFIX")}/{file_name}",
+                        "Key": f"{config.BATCH_INITIATION_ERROR_S3_PREFIX}/{file_name}",
                     },
                 }
             )
