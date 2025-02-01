@@ -122,10 +122,7 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(
-            __dirname,
-            "../lambdas/python/functions/send_batch_email_event"
-          )
+          path.join(__dirname, "../lambdas/python/send_batch_email_event")
         ),
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
@@ -152,10 +149,7 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(
-            __dirname,
-            "../lambdas/python/functions/process_batch_email_event"
-          )
+          path.join(__dirname, "../lambdas/python/process_batch_email_event")
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -175,10 +169,7 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(
-            __dirname,
-            "../lambdas/python/functions/schedule_batch_email"
-          )
+          path.join(__dirname, "../lambdas/python/schedule_batch_email")
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -204,10 +195,7 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "lambda_function.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(
-            __dirname,
-            "../lambdas/python/functions/process_ses_template"
-          )
+          path.join(__dirname, "../lambdas/python/process_ses_template")
         ),
         environment: {
           LOG_LEVEL: "INFO",
