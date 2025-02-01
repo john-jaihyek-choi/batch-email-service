@@ -134,7 +134,7 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 #### Roadblocks
 
-- [ ] SES Sandbox -> Production
+- [x] SES Sandbox -> Production
   - AWS account, by default, is enabled with SES sandbox mode which allows 200 emails per day limit. Admin must open a ticket with AWS to enable production, then to update qutoa limit for number of emails per day send limit.
 - [x] [Email Deliverability Issue](#email-deliverability-issue)
 
