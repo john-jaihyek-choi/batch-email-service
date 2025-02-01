@@ -17,10 +17,18 @@
     },
     {
         "template_key": {
-            "S": "templates/post-card-combined-template.html"
+            "S": "templates/simple-text-template-1.txt"
         },
         "fields": {
             "S": ""
+        }
+    },
+    {
+        "template_key": {
+            "S": "templates/post-card-combined-template.html"
+        },
+        "fields": {
+            "S": "first_name,loan_type"
         }
     }
 ]
