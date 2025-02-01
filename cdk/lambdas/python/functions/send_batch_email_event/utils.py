@@ -37,23 +37,24 @@ def batch_read_csv(file_obj, batch_size: int):
             custom_fields = {"row_number": row_number}
             row_info = OrderedDict({**custom_fields, **row})
 
-            missing_fields = validate_row(row)
+            basic_fields, template_fields = validate_basic_fields(
+                row, config.EMAIL_REQUIRED_FIELDS
+            ), validate_template_fields(row, config.TEMPLATE_METADATA_TABLE_NAME)
 
-            if missing_fields:  # append error message to row_errors
+            if (
+                basic_fields or template_fields
+            ):  # basic or template specific fields missing
+                message = f"Missing {"basic" if basic_fields else ""}{" & " if basic_fields and template_fields else ""}{"template specific" if template_fields else ""} required fields"
                 row_errors.append(
                     OrderedDict(
                         {
                             **row_info,
-                            "Error": (
-                                "Missing required fields"
-                                if missing_fields
-                                else "Unidentified Error - Seek admin assistance"
-                            ),
-                            "MissingFields": missing_fields,
+                            "Error": message,
+                            "MissingFields": basic_fields + template_fields,
                         }
                     )
                 )
-            else:
+            else:  # no missing fields
                 batch.append(row_info)
         except Exception as e:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
@@ -313,18 +314,6 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
             errors=batch_errors,
             error_count=len(batch_errors),
         )
-
-
-def validate_row(row: Dict[str, Any]) -> Dict[str, Any]:  # Validates a single CSV row.
-    missing_fields = validate_basic_fields(row, config.EMAIL_REQUIRED_FIELDS)
-
-    if not missing_fields:
-        missing_template_fields = validate_template_fields(
-            row, config.TEMPLATE_METADATA_TABLE_NAME
-        )
-        missing_fields.extend(missing_template_fields)
-
-    return missing_fields
 
 
 def validate_template_fields(row: Dict[str, Any], ddb_table_name) -> List[str]:
