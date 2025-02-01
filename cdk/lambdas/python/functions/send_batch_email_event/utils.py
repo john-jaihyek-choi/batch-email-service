@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import urllib.parse
 import logging
@@ -243,6 +244,11 @@ def generate_batch_payload(
         logger.exception(f"Type error at generate_batch_payload: {e}")
 
 
+@lru_cache(maxsize=config.RECIPIENTS_PER_MESSAGE)
+def get_template_metadata(ddb_table_name: str, primary_key: str):
+    return get_ddb_item(ddb_table_name, primary_key)
+
+
 def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
     try:
         recipients_per_message = config.RECIPIENTS_PER_MESSAGE
@@ -321,7 +327,7 @@ def validate_template_fields(row: Dict[str, Any], ddb_table_name) -> List[str]:
     missing = []
 
     try:
-        response: Dict[str, Any] = get_ddb_item(ddb_table_name, template_key)
+        response: Dict[str, Any] = get_template_metadata(ddb_table_name, template_key)
     except Exception as e:
         logger.exception(f"Unexpected error with get_ddb_item: {e}")
         raise
