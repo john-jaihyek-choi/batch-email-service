@@ -469,6 +469,7 @@ List of resources found valuable for development
 - [Mail Tester App](https://www.mail-tester.com/)
 - [SES Pitfalls](https://dev.to/slsbytheodo/from-zero-to-hero-send-aws-ses-emails-like-a-pro-4nei)
 - [Free Email HTML Templates](https://designmodo.com/email-templates/)
+- [HTML real-time editor](https://htmledit.squarefree.com/)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
