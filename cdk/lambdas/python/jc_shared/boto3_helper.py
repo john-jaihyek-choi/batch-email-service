@@ -108,7 +108,7 @@ def send_ses_email(
     send_to: str,
     subject: str,
     body: str,
-    body_type: Literal["html" | "plain"] = "plain",
+    body_type: Literal["html", "plain"] = "plain",
     attachments: Dict[str, str] = {},
 ) -> None:
     """
