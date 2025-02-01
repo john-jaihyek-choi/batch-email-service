@@ -17,9 +17,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# # importing after loading environment due to dependencies
-# from functions.send_batch_email_event.lambda_function import lambda_handler
-
 
 # Restrict external library logs to WARNING due to noise
 hide_logs = ["boto3_helper", "boto3", "urlib3", "botocore"]
@@ -161,7 +158,7 @@ def mocked_ddb():
 
 @pytest.fixture
 def handler() -> HandlerFunction:
-    from functions.send_batch_email_event.lambda_function import lambda_handler
+    from send_batch_email_event.lambda_function import lambda_handler
 
     return lambda_handler
 
