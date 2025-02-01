@@ -156,7 +156,7 @@ def mocked_ddb():
         yield ddb
 
 
-@pytest.fixture
+@pytest.fixture(scope="module", autouse=True)
 def handler() -> HandlerFunction:
     from send_batch_email_event.lambda_function import lambda_handler
 
@@ -250,7 +250,7 @@ def test_invalid_s3_event_name(
     response = handler(invalid_event_name, {})
 
     assert response["StatusCode"] == HTTPStatus.NO_CONTENT
-    assert response["Message"] == "Target valid targets found"
+    assert response["Message"] == "No valid targets found"
 
 
 def test_sent_message_validation(
