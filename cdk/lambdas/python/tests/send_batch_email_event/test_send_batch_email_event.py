@@ -194,9 +194,29 @@ def test_partial_success(handler: HandlerFunction, partial_success_event):
 def test_missing_required_csv_fields(
     handler: HandlerFunction,
     mocked_s3: S3Client,
-    missing_required_csv_field_event: S3Event,
+    missing_basic_required_csv_field_event: S3Event,
 ) -> None:
-    response = handler(missing_required_csv_field_event, {})
+    response = handler(missing_basic_required_csv_field_event, {})
+
+    body = json.loads(response["Body"])
+    failed_batches = body.get("FailedBatches", [])
+
+    object_relocation_successful = failed_s3_object_moved_successfully(
+        s3=mocked_s3, s3_batches=failed_batches
+    )
+
+    assert object_relocation_successful
+    assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert response["Message"] == "Failed processing the batches"
+    assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
+
+
+def test_missing_template_specific_csv_fields(
+    handler: HandlerFunction,
+    mocked_s3: S3Client,
+    missing_template_specific_field_event: S3Event,
+) -> None:
+    response = handler(missing_template_specific_field_event, {})
 
     body = json.loads(response["Body"])
     failed_batches = body.get("FailedBatches", [])
@@ -370,8 +390,46 @@ def partial_success_event() -> S3Event:
 
 
 @pytest.fixture
-def missing_required_csv_field_event() -> S3Event:
-    file_name = "missing-required-column.csv"
+def missing_basic_required_csv_field_event() -> S3Event:
+    file_name = "missing-basic-required-column.csv"
+
+    return {
+        "Records": [
+            {
+                "eventVersion": "2.0",
+                "eventSource": "aws:s3",
+                "awsRegion": os.getenv("AWS_DEFAULT_REGION"),
+                "eventTime": "1970-01-01T00:00:00.000Z",
+                "eventName": "ObjectCreated:Put",
+                "userIdentity": {"principalId": "EXAMPLE"},
+                "requestParameters": {"sourceIPAddress": "127.0.0.1"},
+                "responseElements": {
+                    "x-amz-request-id": "EXAMPLE123456789",
+                    "x-amz-id-2": "EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH",
+                },
+                "s3": {
+                    "s3SchemaVersion": "1.0",
+                    "configurationId": "testConfigRule",
+                    "bucket": {
+                        "name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
+                        "ownerIdentity": {"principalId": "EXAMPLE"},
+                        "arn": f"arn:aws:s3:::{os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")}",
+                    },
+                    "object": {
+                        "key": f"batch/send/{file_name}",
+                        "size": 1024,
+                        "eTag": "0123456789abcdef0123456789abcdef",
+                        "sequencer": "0A1B2C3D4E5F678901",
+                    },
+                },
+            }
+        ]
+    }
+
+
+@pytest.fixture
+def missing_template_specific_field_event() -> S3Event:
+    file_name = "missing-template-specific-column.csv"
 
     return {
         "Records": [
