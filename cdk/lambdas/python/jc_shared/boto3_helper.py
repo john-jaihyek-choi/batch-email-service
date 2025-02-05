@@ -4,25 +4,36 @@ import os
 import boto3
 import boto3.exceptions
 from botocore.exceptions import ClientError
-from collections import defaultdict
-from typing import Dict, Any, List, Literal
+from collections import defaultdict, OrderedDict
+from typing import Dict, Any, List, Literal, Optional
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
+from mypy_boto3_sqs.client import SQSClient
+from mypy_boto3_s3.client import S3Client
+from mypy_boto3_sesv2.client import SESV2Client
+from mypy_boto3_dynamodb.client import DynamoDBClient
+from mypy_boto3_s3.type_defs import (
+    GetObjectOutputTypeDef,
+    CopySourceTypeDef,
+    ObjectIdentifierTypeDef,
+)
+from mypy_boto3_sqs.type_defs import SendMessageResultTypeDef
+from mypy_boto3_dynamodb.type_defs import GetItemOutputTypeDef
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 
-sqs = boto3.client("sqs", aws_region)
-s3 = boto3.client("s3", aws_region)
-ses = boto3.client("sesv2", aws_region)
-ddb = boto3.client("dynamodb", aws_region)
+sqs: SQSClient = boto3.client("sqs", aws_region)
+s3: S3Client = boto3.client("s3", aws_region)
+ses: SESV2Client = boto3.client("sesv2", aws_region)
+ddb: DynamoDBClient = boto3.client("dynamodb", aws_region)
 
 
-def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
+def get_s3_object(bucket_name: str, object_key: str) -> GetObjectOutputTypeDef:
     try:
         return s3.get_object(Bucket=bucket_name, Key=object_key)
     except s3.exceptions.NoSuchBucket:
@@ -36,7 +47,7 @@ def get_s3_object(bucket_name: str, object_key: str) -> Dict[str, Any]:
         raise
 
 
-def get_ddb_item(table_name: str, pk: str) -> Dict[Any, Any]:
+def get_ddb_item(table_name: str, pk: str) -> GetItemOutputTypeDef:
     try:
         return ddb.get_item(TableName=table_name, Key={"template_key": {"S": pk}})
     except ddb.exceptions.ResourceNotFoundException:
@@ -51,14 +62,14 @@ def get_ddb_item(table_name: str, pk: str) -> Dict[Any, Any]:
 
 
 def move_s3_objects(
-    targets: List[Dict[Literal["From", "To"], Dict[Literal["Bucket", "Key"], str]]]
+    targets: List[Dict[Literal["From", "To"], CopySourceTypeDef]]
 ) -> None:
-    # copy the object from source to destination
-    delete_list = defaultdict(list)
+    delete_list: Dict[str, List[ObjectIdentifierTypeDef]] = defaultdict(list)
 
     logger.info("copying targets...")
     for target in targets:
-        source, destination = target["From"], target["To"]
+        source = target["From"]
+        destination = target["To"]
 
         try:
             s3.copy_object(
@@ -66,6 +77,7 @@ def move_s3_objects(
                 CopySource=source,
                 Key=destination["Key"],
             )
+
             delete_list[source["Bucket"]].append({"Key": source["Key"]})
         except Exception as e:
             logger.exception(f"Error copying s3 object - {target}: {e}")
@@ -82,7 +94,7 @@ def move_s3_objects(
 def send_sqs_message(
     queue_name: str,
     message_body: Any,
-) -> Dict[Any, Any]:
+) -> SendMessageResultTypeDef:
     try:
         logger.info("processing sqs message...")
 
@@ -108,8 +120,8 @@ def send_ses_email(
     send_to: str,
     subject: str,
     body: str,
+    attachments: OrderedDict[str, str],
     body_type: Literal["html", "plain"] = "plain",
-    attachments: Dict[str, str] = {},
 ) -> None:
     """
     Sends an email using Amazon SES with optional attachments.
@@ -143,7 +155,7 @@ def send_ses_email(
         msg["Subject"] = subject
         msg.attach(MIMEText(body, body_type))
 
-        # attach csv attachments to msg
+        # attach csv attachments to MIMEMultipart
         for filename, content in attachments.items():
             part = MIMEBase("application", "octet-stream")
             part.set_payload(content.encode("utf-8"))
