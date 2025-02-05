@@ -5,14 +5,17 @@ import logging
 import json
 import boto3
 from pytest import FixtureRequest
-from typing import Callable, List, Dict, Any
+from typing import Callable, List, Dict, Any, Generator, cast
 from http import HTTPStatus
 from moto import mock_aws
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_s3.client import S3Client
 from mypy_boto3_ses.client import SESClient
 from mypy_boto3_dynamodb.client import DynamoDBClient
+from mypy_boto3_s3.literals import BucketLocationConstraintType
+from mypy_boto3_dynamodb.type_defs import WriteRequestUnionTypeDef
 from aws_lambda_powertools.utilities.data_classes import S3Event
+from aws_lambda_powertools.utilities.typing import LambdaContext
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -49,11 +52,11 @@ def aws_credential_overwrite():
 
 @mock_aws
 @pytest.fixture(scope="module", autouse=True)
-def mocked_sqs():
+def mocked_sqs() -> Generator[SQSClient, None, None]:
     with mock_aws():
         try:
             sqs: SQSClient = boto3.client("sqs", os.getenv("AWS_DEFAULT_REGION"))
-            sqs.create_queue(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME"))
+            sqs.create_queue(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME", ""))
         except Exception as e:
             pytest.fail(f"Failed setting up mock sqs {e}")
         yield sqs
@@ -61,9 +64,11 @@ def mocked_sqs():
 
 @mock_aws
 @pytest.fixture(scope="module", autouse=True)
-def mocked_s3():
-    aws_region: str = os.getenv("AWS_DEFAULT_REGION")
-    bucket_name: str = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME")
+def mocked_s3() -> Generator[S3Client, None, None]:
+    aws_region = cast(
+        BucketLocationConstraintType, os.getenv("AWS_DEFAULT_REGION", "us-east-2")
+    )
+    bucket_name: str = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME", "")
 
     with mock_aws():
         try:
@@ -77,11 +82,11 @@ def mocked_s3():
 
             test_assets = [
                 {
-                    "local_path": os.getenv("TEST_EXAMPLE_BATCH_PATH"),
+                    "local_path": os.getenv("TEST_EXAMPLE_BATCH_PATH", ""),
                     "s3_prefix": "batch/send/",
                 },
                 {
-                    "local_path": os.getenv("TEST_EXAMPLE_TEMPLATE_PATH"),
+                    "local_path": os.getenv("TEST_EXAMPLE_TEMPLATE_PATH", ""),
                     "s3_prefix": "templates/",
                 },
             ]
@@ -101,27 +106,27 @@ def mocked_s3():
 
 
 @pytest.fixture(scope="module", autouse=True)
-def mocked_ses():
+def mocked_ses() -> Generator[SESClient, None, None]:
     # Initialize SES client
     with mock_aws():
         try:
             ses: SESClient = boto3.client(
                 "ses", region_name=os.getenv("AWS_DEFAULT_REGION")
             )
-            ses.verify_email_identity(EmailAddress=os.getenv("SES_NO_REPLY_SENDER"))
+            ses.verify_email_identity(EmailAddress=os.getenv("SES_NO_REPLY_SENDER", ""))
         except Exception as e:
             pytest.fail(f"Failed to setup ses client and/or verify email identity: {e}")
         yield ses
 
 
 @pytest.fixture(scope="module", autouse=True)
-def mocked_ddb():
+def mocked_ddb() -> Generator[DynamoDBClient, None, None]:
     # Create table and put items
-    db_path: str = os.getenv("TEST_EXAMPLE_DB_PATH")
+    db_path: str = os.getenv("TEST_EXAMPLE_DB_PATH", "")
 
     with mock_aws():
         try:
-            table_name = os.getenv("TEMPLATE_METADATA_TABLE_NAME")
+            table_name = os.getenv("TEMPLATE_METADATA_TABLE_NAME", "")
 
             ddb: DynamoDBClient = boto3.client(
                 "dynamodb", region_name=os.getenv("AWS_DEFAULT_REGION")
@@ -138,7 +143,7 @@ def mocked_ddb():
 
             ddb.get_waiter("table_exists").wait(TableName=table_name)
 
-            batch_write_item = []
+            batch_write_item: List[WriteRequestUnionTypeDef] = []
 
             with open(db_path) as file:
                 rows = json.load(file)
@@ -157,8 +162,8 @@ def mocked_ddb():
 
 
 @pytest.fixture(scope="module", autouse=True)
-def handler() -> HandlerFunction:
-    from send_batch_email_event.lambda_function import lambda_handler
+def handler() -> Callable[[S3Event, LambdaContext | None], Dict[str, Any]]:
+    from send_batch_email_event.main import lambda_handler
 
     return lambda_handler
 
@@ -191,11 +196,11 @@ def test_partial_success(handler: HandlerFunction, partial_success_event):
 def test_missing_required_csv_fields(
     handler: HandlerFunction,
     mocked_s3: S3Client,
-    missing_basic_required_csv_field_event: S3Event,
+    missing_basic_required_csv_field_event: Dict[str, Any],
 ) -> None:
-    response = handler(missing_basic_required_csv_field_event, {})
+    response = handler(missing_basic_required_csv_field_event, None)
 
-    body = json.loads(response["Body"])
+    body = json.loads(response.get("Body", ""))
     failed_batches = body.get("FailedBatches", [])
 
     object_relocation_successful = failed_s3_object_moved_successfully(
@@ -211,7 +216,7 @@ def test_missing_required_csv_fields(
 def test_missing_template_specific_csv_fields(
     handler: HandlerFunction,
     mocked_s3: S3Client,
-    missing_template_specific_field_event: S3Event,
+    missing_template_specific_field_event: Dict[str, Any],
 ) -> None:
     response = handler(missing_template_specific_field_event, {})
 
@@ -228,7 +233,7 @@ def test_missing_template_specific_csv_fields(
     assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
 
 
-def test_empty_event(handler: HandlerFunction, empty_event: S3Event) -> None:
+def test_empty_event(handler: HandlerFunction, empty_event: Dict[str, Any]) -> None:
     response = handler(empty_event, {})
 
     assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
@@ -236,7 +241,7 @@ def test_empty_event(handler: HandlerFunction, empty_event: S3Event) -> None:
 
 
 def test_empty_s3_content(
-    handler: HandlerFunction, empty_s3_content_event: S3Event
+    handler: HandlerFunction, empty_s3_content_event: Dict[str, Any]
 ) -> None:
     response = handler(empty_s3_content_event, {})
 
@@ -245,7 +250,7 @@ def test_empty_s3_content(
 
 
 def test_invalid_s3_event_name(
-    handler: HandlerFunction, invalid_event_name: S3Event
+    handler: HandlerFunction, invalid_event_name: Dict[str, Any]
 ) -> None:
     response = handler(invalid_event_name, {})
 
@@ -257,14 +262,14 @@ def test_sent_message_validation(
     mocked_sqs: SQSClient,
 ):
     sqs = mocked_sqs
-    queue = sqs.get_queue_url(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME"))
+    queue = sqs.get_queue_url(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME", ""))
     message = sqs.receive_message(QueueUrl=queue["QueueUrl"])
 
     assert "Recipients" in json.loads(message["Messages"][0]["Body"])
 
 
 @pytest.fixture
-def valid_single_record_event() -> S3Event:
+def valid_single_record_event() -> Dict[str, Any]:
     file_name = "valid-recipients-list-1.csv"
 
     return {
@@ -302,10 +307,10 @@ def valid_single_record_event() -> S3Event:
 
 
 @pytest.fixture
-def valid_multi_record_event() -> S3Event:
+def valid_multi_record_event() -> Dict[str, Any]:
     file_names = ["valid-recipients-list-1.csv", "valid-recipients-list-2.csv"]
 
-    payload = {"Records": []}
+    payload: Dict[str, Any] = {"Records": []}
 
     for name in file_names:
 
@@ -344,11 +349,11 @@ def valid_multi_record_event() -> S3Event:
 
 
 @pytest.fixture
-def partial_success_event() -> S3Event:
+def partial_success_event() -> Dict[str, Any]:
     # file_names = ["partially-complete-list.csv", "partially-complete-list-1.csv"]
     file_names = ["partially-complete-list.csv"]
 
-    payload = {"Records": []}
+    payload: Dict[str, Any] = {"Records": []}
 
     for name in file_names:
 
@@ -387,7 +392,7 @@ def partial_success_event() -> S3Event:
 
 
 @pytest.fixture
-def missing_basic_required_csv_field_event() -> S3Event:
+def missing_basic_required_csv_field_event() -> Dict[str, Any]:
     file_name = "missing-basic-required-column.csv"
 
     return {
@@ -425,7 +430,7 @@ def missing_basic_required_csv_field_event() -> S3Event:
 
 
 @pytest.fixture
-def missing_template_specific_field_event() -> S3Event:
+def missing_template_specific_field_event() -> Dict[str, Any]:
     file_name = "missing-template-specific-column.csv"
 
     return {
@@ -463,12 +468,12 @@ def missing_template_specific_field_event() -> S3Event:
 
 
 @pytest.fixture
-def empty_event() -> S3Event:
+def empty_event() -> None:
     return None
 
 
 @pytest.fixture
-def empty_s3_content_event() -> S3Event:
+def empty_s3_content_event() -> Dict[str, Any]:
     file_name = "empty-s3-content.csv"
 
     return {
@@ -506,7 +511,7 @@ def empty_s3_content_event() -> S3Event:
 
 
 @pytest.fixture
-def invalid_event_name() -> S3Event:
+def invalid_event_name() -> Dict[str, Any]:
     file_name = "valid-recipients-list-1.csv"
 
     return {

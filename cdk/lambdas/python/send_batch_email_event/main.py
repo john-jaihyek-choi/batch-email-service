@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-def lambda_handler(event: S3Event, context: Optional[LambdaContext] = None):
+def lambda_handler(
+    event: S3Event, context: Optional[LambdaContext] = None
+) -> Dict[str, Any]:
     try:
         if not event or not event.get("Records"):  # handle invalid events
             raise ValueError("Invalid event: Missing 'Records' key")
