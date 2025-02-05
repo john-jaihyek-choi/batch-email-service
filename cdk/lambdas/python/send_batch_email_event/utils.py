@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-# reads a CSV file in batches.
-def batch_read_csv(file_obj, batch_size: int):
+def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in place
     batch: List[OrderedDict[str, Any]] = []
     row_errors: List[OrderedDict[str, Any]] = []
 
@@ -33,7 +32,7 @@ def batch_read_csv(file_obj, batch_size: int):
         yield batch, row_errors
 
     for row_number, row in enumerate(csv_reader, start=2):
-        if not row:  # Skip empty rows
+        if not row:
             continue
 
         try:
@@ -74,23 +73,27 @@ def batch_read_csv(file_obj, batch_size: int):
         if len(batch) == batch_size:
             yield batch, []
             batch = []
-    else:  # Yield batch and row_errors once completion
+    else:
         yield batch, row_errors
 
 
-def format_and_filter_targets(s3_event: S3Event) -> List[Dict[str, str]]:
+def format_and_filter_targets(
+    s3_event: S3Event,
+) -> List[
+    Dict[str, str]
+]:  # retrieve all s3 targets in an S3Event and organize it in target_objects array for further processing
     logger.info("formatting and filtering tagets...")
 
     res = []
 
-    for record in s3_event["Records"]:  # iterate on s3 event records and append to res
+    for record in s3_event["Records"]:
         event_type: str = record["eventName"]
         bucket_name: str = record["s3"]["bucket"]["name"]
         s3_object_key: str = record["s3"]["object"]["key"].split("/")
         principal_id: str = record["userIdentity"]["principalId"]
 
         prefix = "/".join(s3_object_key[:-1])  # get s3 object prefix
-        key = urllib.parse.unquote(s3_object_key[-1])  # get object key
+        key = urllib.parse.unquote(s3_object_key[-1])  # get object (file) name
 
         if (
             "s3" in record
@@ -125,7 +128,8 @@ def generate_email_template(
         aggregate_success_count, aggregate_error_count = 0, 0
 
         for target in target_errors:
-            file_name = target["Target"].split("/")[-1]
+            target_path: str = target.get("Target")
+            file_name = target_path.split("/")[-1]
 
             success_count, error_count = target.get("SuccessCount", 0), target.get(
                 "ErrorCount", 0
@@ -154,6 +158,7 @@ def generate_email_template(
             aggregate_success_count / aggregate_total_count * 100
         )
 
+        # replacement key-val pair (key = variables in html, val = value to be replaced to)
         replacements = {
             "{{aggregate_success_rate}}": (f"{aggregate_success_rate}"),
             "{{aggregate_error_rate}}": (f"{aggregate_error_rate}"),
@@ -171,6 +176,7 @@ def generate_email_template(
             "{{batch_success_details}}": f"{"".join(batch_success_details)}",
         }
 
+        # replace key-val pairs in replacements from the template
         template = re.sub(
             r"{{(aggregate_success_rate|aggregate_error_rate|aggregate_success_text|aggregate_error_text|attachment_list|batch_success_details)}}",
             lambda match: replacements.get(match.group(0), match.group(0)),
@@ -210,7 +216,9 @@ def generate_batch_payload(
     }
 
 
-@lru_cache(maxsize=config.RECIPIENTS_PER_MESSAGE)
+@lru_cache(
+    maxsize=config.RECIPIENTS_PER_MESSAGE
+)  # allocate cache to decrease api call volume to ddb
 def get_template_metadata(ddb_table_name: str, primary_key: str):
     return get_ddb_item(ddb_table_name, primary_key)
 
@@ -234,6 +242,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
         logger.info(f"getting {target_path}...")
         s3_object = get_s3_object(bucket_name=bucket_name, object_key=f"{prefix}/{key}")
 
+        # wrap s3 object body as IO for it to be read in place
         wrapper = io.TextIOWrapper(cast(IO[bytes], s3_object["Body"]), encoding="utf-8")
 
         logger.info(f"grouping recipients by {recipients_per_message}...")

@@ -23,7 +23,6 @@ logger.setLevel(config.LOG_LEVEL)
 
 
 def process_event(event: S3Event) -> Dict[str, Any]:
-    # retrieve all target s3 objects and store it in target_objects array for further processing
     target_objects = format_and_filter_targets(event)
 
     if not target_objects:
@@ -45,7 +44,6 @@ def process_event(event: S3Event) -> Dict[str, Any]:
             target_path: str = batch.get("Target", "unknown target")
             error_batch: List[Dict[str, Any]] = batch.get("Errors", [])
 
-            # add batch_errors to target_errors if any
             if batch.get("Errors"):
                 error_count = batch.get("ErrorCount", 0)
                 success_count = batch.get("SuccessCount", 0)
@@ -64,10 +62,9 @@ def process_event(event: S3Event) -> Dict[str, Any]:
         except Exception as e:
             logger.exception(f"Error processing target {target}: {e}")
 
-    if target_errors:  # handle response with target errors
+    if target_errors:
         return handle_target_errors(target_errors, successful_recipients_count)
 
-    # handle successful batch processing
     logger.info("successfully processed the batches")
 
     return generate_handler_response(
@@ -91,7 +88,7 @@ def handle_target_errors(
     html_template_key = config.SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY
     text_template_key = config.SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY
 
-    # generate html email template
+    # generate html email template (to be attached to the email)
     body = generate_email_template(
         template_bucket, html_template_key, target_errors, "html"
     )
@@ -111,7 +108,9 @@ def handle_target_errors(
         body_type="html",
     )
 
-    if successful_recipients_count:  # handle partial success case
+    if (
+        successful_recipients_count
+    ):  # handle partial success case (x out of total recipients successful scenario)
         logger.info("partially processed the batches")
         return generate_handler_response(
             status_code=HTTPStatus.PARTIAL_CONTENT.value,
@@ -130,7 +129,6 @@ def handle_target_errors(
 
 
 def move_failed_objects(target_errors: List[Dict[str, Any]]):
-    # handle failed batch case
     try:
         s3_list: List[Dict[Literal["From", "To"], CopySourceTypeDef]] = []
         for target in target_errors:
@@ -138,6 +136,7 @@ def move_failed_objects(target_errors: List[Dict[str, Any]]):
             bucket, file_name = source[0], source[-1]
 
             key = "/".join(source[1:])
+            # organize from and to bucket objects in a list
             s3_list.append(
                 {
                     "From": {

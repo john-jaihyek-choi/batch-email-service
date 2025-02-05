@@ -16,7 +16,7 @@ def lambda_handler(
     event: S3Event, context: Optional[LambdaContext] = None
 ) -> Dict[str, Any]:
     try:
-        if not event or not event.get("Records"):  # handle invalid events
+        if not event or not event.get("Records"):
             raise ValueError("Invalid event: Missing 'Records' key")
 
         logger.info("event: %s", json.dumps(event, indent=2))
