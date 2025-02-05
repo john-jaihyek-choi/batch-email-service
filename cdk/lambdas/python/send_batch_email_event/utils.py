@@ -4,10 +4,12 @@ import logging
 import csv
 import io
 import re
-from config import config
+from .config import config
 from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Literal
+from typing import Dict, List, Any, Literal, Optional, cast, IO
+from aws_lambda_powertools.utilities.data_classes import S3Event
+from botocore.exceptions import ClientError
 from jc_shared.boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
 
 logger = logging.getLogger(__name__)
@@ -16,7 +18,9 @@ logger.setLevel(config.LOG_LEVEL)
 
 # reads a CSV file in batches.
 def batch_read_csv(file_obj, batch_size: int):
-    batch, row_errors = [], []
+    batch: List[OrderedDict[str, Any]] = []
+    row_errors: List[OrderedDict[str, Any]] = []
+
     csv_reader = csv.DictReader(file_obj)
     if csv_reader.fieldnames is None:
         row_errors.append(
@@ -55,16 +59,17 @@ def batch_read_csv(file_obj, batch_size: int):
                 )
             else:  # no missing fields
                 batch.append(row_info)
-        except Exception as e:
-            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+        except ClientError as e:
+            response = cast(Dict[str, Any], e.response)
+
+            if response["Error"]["Code"] == "ResourceNotFoundException":
                 row_errors.append(
                     OrderedDict({**row_info, "Error": f"Template does not exist {e}"})
                 )
-            else:
-                row_errors.append(
-                    OrderedDict({**row_info, "Error": f"Unidentified error {e}"})
-                )
-            continue
+        except Exception as e:
+            row_errors.append(
+                OrderedDict({**row_info, "Error": f"Unidentified error {e}"})
+            )
 
         if len(batch) == batch_size:
             yield batch, []
@@ -73,7 +78,7 @@ def batch_read_csv(file_obj, batch_size: int):
         yield batch, row_errors
 
 
-def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
+def format_and_filter_targets(s3_event: S3Event) -> List[Dict[str, str]]:
     logger.info("formatting and filtering tagets...")
 
     res = []
@@ -109,8 +114,8 @@ def format_and_filter_targets(s3_event: Dict[str, Any]) -> List[Dict[str, str]]:
 def generate_email_template(
     s3_bucket: str,
     s3_key: str,
-    template_type: Literal["html", "txt"],
     target_errors: List[Dict[str, Any]],
+    template_type: Optional[Literal["html", "txt"]] = "txt",
 ) -> str:
     try:
         file = get_s3_object(s3_bucket, s3_key)
@@ -185,30 +190,24 @@ def generate_target_errors_payload(
     error_count: int,
     success_count: int,
 ) -> Dict[str, Any]:
-    try:
-        return {
-            "Target": target,
-            "Error": error_detail,
-            "Errors": error_batch,
-            "ErrorCount": error_count,
-            "SuccessCount": success_count,
-        }
-    except TypeError as e:
-        logger.exception(f"Type error at generate_target_errors_payload: {e}")
+    return {
+        "Target": target,
+        "Error": error_detail,
+        "Errors": error_batch,
+        "ErrorCount": error_count,
+        "SuccessCount": success_count,
+    }
 
 
 def generate_batch_payload(
     target_path: str, success_count: int, errors: List[Dict[str, Any]], error_count: int
 ) -> Dict[str, Any]:
-    try:
-        return {
-            "Target": target_path,
-            "SuccessCount": success_count,
-            "Errors": errors,
-            "ErrorCount": error_count,
-        }
-    except TypeError as e:
-        logger.exception(f"Type error at generate_batch_payload: {e}")
+    return {
+        "Target": target_path,
+        "SuccessCount": success_count,
+        "Errors": errors,
+        "ErrorCount": error_count,
+    }
 
 
 @lru_cache(maxsize=config.RECIPIENTS_PER_MESSAGE)
@@ -235,7 +234,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
         logger.info(f"getting {target_path}...")
         s3_object = get_s3_object(bucket_name=bucket_name, object_key=f"{prefix}/{key}")
 
-        wrapper = io.TextIOWrapper(s3_object.get("Body"), encoding="utf-8")
+        wrapper = io.TextIOWrapper(cast(IO[bytes], s3_object["Body"]), encoding="utf-8")
 
         logger.info(f"grouping recipients by {recipients_per_message}...")
 
@@ -299,15 +298,18 @@ def validate_template_fields(row: Dict[str, Any], ddb_table_name) -> List[str]:
         logger.exception(f"Unexpected error with get_ddb_item: {e}")
         raise
 
-    ddb_item: Dict[str, Dict[str, str]] = response.get("Item")
+    ddb_item: Dict[str, Any] | None = response.get("Item")
 
     # check ddb_item is valid, fields column is valid, and field is non-empty
     if ddb_item and ddb_item["fields"] and ddb_item["fields"]["S"]:
-        fields = ddb_item.get("fields")["S"]
-        for field in fields.split(","):
-            field = field.strip()
-            if field not in row or not row[field]:
-                missing.append(field)
+        fields: Dict[str, Any] = ddb_item.get("fields", {})
+        fields_list: str | None = fields["S"]
+
+        if fields_list:
+            for field in fields_list.split(","):
+                field = field.strip()
+                if field not in row or not row[field]:
+                    missing.append(field)
 
     return missing
 
