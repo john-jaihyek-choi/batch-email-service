@@ -1,16 +1,18 @@
 import json
 import logging
-from config import config
-from typing import Dict, Any
+from .config import config
+from typing import Dict, Any, Optional
 from http import HTTPStatus
 from jc_shared.utils import generate_handler_response
-from processor import process_event
+from .processor import process_event
+from aws_lambda_powertools.utilities.data_classes import S3Event
+from aws_lambda_powertools.utilities.typing import LambdaContext
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-def lambda_handler(event: Dict[str, Any], context: Dict[Any, Any] = None):
+def lambda_handler(event: S3Event, context: Optional[LambdaContext] = None):
     try:
         if not event or not event.get("Records"):  # handle invalid events
             raise ValueError("Invalid event: Missing 'Records' key")
