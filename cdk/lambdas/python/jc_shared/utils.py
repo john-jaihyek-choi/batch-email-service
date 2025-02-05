@@ -3,13 +3,13 @@ import logging
 import csv
 import io
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, KeysView
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 
-def generate_csv(headers: List[str], contents: List[Dict[str, Any]]) -> str:
+def generate_csv(headers: KeysView[str], contents: List[Dict[str, Any]]) -> str:
     # Generate CSV content in memory
     try:
         output = io.StringIO()
@@ -22,13 +22,14 @@ def generate_csv(headers: List[str], contents: List[Dict[str, Any]]) -> str:
         csv_content = output.getvalue()
         output.close()
 
-        return csv_content
     except Exception as e:
         logger.error(f"Error generating csv: {e}")
+    finally:
+        return csv_content or ""
 
 
 def generate_handler_response(
-    status_code: int, message: str, body: Dict[Any, Any] = None
+    status_code: int, message: str, body: Optional[Dict[Any, Any]] = None
 ):
     try:
         response = {
