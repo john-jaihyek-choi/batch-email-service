@@ -1,28 +1,30 @@
 import json
 import logging
-from config import config
-from typing import Dict, Any, List
+from .config import config
+from typing import Dict, Any, List, Literal, Optional
 from http import HTTPStatus
 from collections import OrderedDict
-from utils import (
+from .utils import (
     format_and_filter_targets,
     generate_email_template,
     process_targets,
     generate_target_errors_payload,
 )
+from mypy_boto3_s3.type_defs import CopySourceTypeDef
 from jc_shared.utils import generate_handler_response, generate_csv
 from jc_shared.boto3_helper import (
     send_ses_email,
     move_s3_objects,
 )
+from aws_lambda_powertools.utilities.data_classes import S3Event
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-def process_event(event: Dict[str, Any]) -> Dict[str, Any]:
+def process_event(event: S3Event) -> Dict[str, Any]:
     # retrieve all target s3 objects and store it in target_objects array for further processing
-    target_objects: List[Dict[str, str]] = format_and_filter_targets(event)
+    target_objects = format_and_filter_targets(event)
 
     if not target_objects:
         return generate_handler_response(
@@ -30,7 +32,8 @@ def process_event(event: Dict[str, Any]) -> Dict[str, Any]:
             message="No valid targets found",
         )
 
-    target_errors, successful_recipients_count = [], 0
+    target_errors: List[Dict[str, Any]] = []
+    successful_recipients_count = 0
 
     logger.info("successfully retrieved all targets from event")
     logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
@@ -39,6 +42,8 @@ def process_event(event: Dict[str, Any]) -> Dict[str, Any]:
         try:
             logger.info(f"Target processing: {json.dumps(target, indent=2)}")
             batch = process_targets(target)
+            target_path: str = batch.get("Target", "unknown target")
+            error_batch: List[Dict[str, Any]] = batch.get("Errors", [])
 
             # add batch_errors to target_errors if any
             if batch.get("Errors"):
@@ -47,9 +52,9 @@ def process_event(event: Dict[str, Any]) -> Dict[str, Any]:
 
                 target_errors.append(
                     generate_target_errors_payload(
-                        target=batch.get("Target"),
+                        target=target_path,
                         error_detail="Error initiating emails",
-                        error_batch=batch.get("Errors"),
+                        error_batch=error_batch,
                         error_count=error_count,
                         success_count=success_count,
                     )
@@ -59,26 +64,27 @@ def process_event(event: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             logger.exception(f"Error processing target {target}: {e}")
 
-        if target_errors:  # handle response with target errors
-            return handle_target_errors(target_errors, successful_recipients_count)
+    if target_errors:  # handle response with target errors
+        return handle_target_errors(target_errors, successful_recipients_count)
 
-        # handle successful batch processing
-        logger.info("successfully processed the batches")
+    # handle successful batch processing
+    logger.info("successfully processed the batches")
 
-        return generate_handler_response(
-            HTTPStatus.OK.value, "Batch processing completed successfully"
-        )
+    return generate_handler_response(
+        HTTPStatus.OK.value, "Batch processing completed successfully"
+    )
 
 
 def handle_target_errors(
     target_errors: List[Dict[str, Any]], successful_recipients_count: int
 ) -> Dict[str, Any]:
-    attachments: Dict[str, str] = OrderedDict()
+    attachments: OrderedDict[str, str] = OrderedDict()
+    fields: Dict[str, str] = target_errors[0].get("Errors", [])[0]
+    headers = fields.keys()
 
-    for error in target_errors:  # generate unique csv per target error
-        headers = error.get("Errors")[0].keys()
-        target = error.get("Target")
-        csv_content = generate_csv(headers, error.get("Errors"))
+    for i, error in enumerate(target_errors):  # generate unique csv per target error
+        target = error.get("Target", f"unknown-target-{i}")
+        csv_content = generate_csv(headers, error.get("Errors", []))
         attachments[target] = csv_content
 
     template_bucket = config.BATCH_EMAIL_SERVICE_BUCKET_NAME
@@ -87,12 +93,12 @@ def handle_target_errors(
 
     # generate html email template
     body = generate_email_template(
-        template_bucket, html_template_key, "html", target_errors
+        template_bucket, html_template_key, target_errors, "html"
     )
 
     # generate text email template (to be attached to the email)
     attachment_body = generate_email_template(
-        template_bucket, text_template_key, "text", target_errors
+        template_bucket, text_template_key, target_errors, "txt"
     )
     attachments["plain-text-email"] = attachment_body
 
@@ -101,8 +107,8 @@ def handle_target_errors(
         send_to=config.SES_ADMIN_EMAIL,
         subject="Batch Email Service - Email Initiation Failed",
         body=body,
-        body_type="html",
         attachments=attachments,
+        body_type="html",
     )
 
     if successful_recipients_count:  # handle partial success case
@@ -126,7 +132,7 @@ def handle_target_errors(
 def move_failed_objects(target_errors: List[Dict[str, Any]]):
     # handle failed batch case
     try:
-        s3_list = []
+        s3_list: List[Dict[Literal["From", "To"], CopySourceTypeDef]] = []
         for target in target_errors:
             source = target["Target"].split("/")
             bucket, file_name = source[0], source[-1]
