@@ -7,10 +7,11 @@ import re
 from .config import config
 from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Literal, Optional, cast, IO
+from typing import Dict, List, Any, Literal, Optional, cast, IO, TypedDict, Tuple
 from aws_lambda_powertools.utilities.data_classes import S3Event
 from botocore.exceptions import ClientError
 from jc_shared.boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
+from jc_shared.utils import S3Target
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
@@ -77,43 +78,6 @@ def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in
         yield batch, row_errors
 
 
-def format_and_filter_targets(
-    s3_event: S3Event,
-) -> List[
-    Dict[str, str]
-]:  # retrieve all s3 targets in an S3Event and organize it in target_objects array for further processing
-    logger.info("formatting and filtering tagets...")
-
-    res = []
-
-    for record in s3_event["Records"]:
-        event_type: str = record["eventName"]
-        bucket_name: str = record["s3"]["bucket"]["name"]
-        s3_object_key: str = record["s3"]["object"]["key"].split("/")
-        principal_id: str = record["userIdentity"]["principalId"]
-
-        prefix = "/".join(s3_object_key[:-1])  # get s3 object prefix
-        key = urllib.parse.unquote(s3_object_key[-1])  # get object (file) name
-
-        if (
-            "s3" in record
-            and prefix == "batch/send"
-            and key.endswith(".csv")
-            and event_type.startswith("ObjectCreated")
-        ):
-            res.append(
-                {
-                    "BucketName": bucket_name,
-                    "Prefix": prefix,
-                    "Key": key,
-                    "PrincipalId": principal_id,
-                    "Timestamp": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
-                }
-            )
-
-    return res
-
-
 def generate_email_template(
     s3_bucket: str,
     s3_key: str,
@@ -128,7 +92,7 @@ def generate_email_template(
         aggregate_success_count, aggregate_error_count = 0, 0
 
         for target in target_errors:
-            target_path: str = target.get("Target")
+            target_path: str = target.get("Target", "")
             file_name = target_path.split("/")[-1]
 
             success_count, error_count = target.get("SuccessCount", 0), target.get(
@@ -223,24 +187,26 @@ def get_template_metadata(ddb_table_name: str, primary_key: str):
     return get_ddb_item(ddb_table_name, primary_key)
 
 
-def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
+def process_targets(s3_target: S3Target) -> Dict[str, Any]:
     try:
         recipients_per_message = config.RECIPIENTS_PER_MESSAGE
 
         batch_errors, success_count = [], 0
 
-        bucket_name, prefix, key, principal_id, timestamp = (
+        bucket_name, prefix, object, principal_id, timestamp = (
             s3_target["BucketName"],
             s3_target["Prefix"],
-            s3_target["Key"],
+            s3_target["Object"],
             s3_target["PrincipalId"],
             s3_target["Timestamp"],
         )
 
-        target_path = f"{bucket_name}/{prefix}/{key}"
+        target_path = f"{bucket_name}/{prefix}{object}"
 
         logger.info(f"getting {target_path}...")
-        s3_object = get_s3_object(bucket_name=bucket_name, object_key=f"{prefix}/{key}")
+        s3_object = get_s3_object(
+            bucket_name=bucket_name, object_key=f"{prefix}{object}"
+        )
 
         # wrap s3 object body as IO for it to be read in place
         wrapper = io.TextIOWrapper(cast(IO[bytes], s3_object["Body"]), encoding="utf-8")
@@ -251,7 +217,7 @@ def process_targets(s3_target: Dict[str, str]) -> Dict[str, Any]:
 
         # group the recipients and send message to sqs
         for batch, failed_rows in batch_read_csv(wrapper, recipients_per_message):
-            batch_id = f"{bucket_name}/{prefix}/{key}-{timestamp}-{batch_number}"
+            batch_id = f"{target_path}-{timestamp}-{batch_number}"
             batch_number += 1
             success_count += len(batch)
 
