@@ -1,11 +1,14 @@
+# stdlib
 import json
 import logging
-
 from typing import Dict, Any, List, Literal
 from http import HTTPStatus
 from collections import OrderedDict
+
+# external libraries
 from mypy_boto3_s3.type_defs import CopySourceTypeDef
 
+# custom modules
 from send_batch_email_event.config import config
 from send_batch_email_event.utils import (
     generate_email_template,

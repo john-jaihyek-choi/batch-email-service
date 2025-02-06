@@ -1,12 +1,14 @@
+# stdlib
 import json
 import logging
-
 from typing import Dict, Any, List, Optional
 from http import HTTPStatus
 
+# external libraries
 from aws_lambda_powertools.utilities.data_classes import S3Event
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
+# custom modules
 from send_batch_email_event.config import config
 from send_batch_email_event.processor import process_event
 from jc_custom.utils import generate_handler_response

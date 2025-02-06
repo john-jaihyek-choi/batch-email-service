@@ -1,12 +1,15 @@
-import boto3.exceptions
+# stdlib
 import pytest
 import os
 import logging
 import json
-import boto3
-from pytest import FixtureRequest
 from typing import Callable, List, Dict, Any, Generator, cast
 from http import HTTPStatus
+
+# external libararies
+import boto3.exceptions
+import boto3
+from pytest import FixtureRequest
 from moto import mock_aws
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_s3.client import S3Client
@@ -163,6 +166,7 @@ def mocked_ddb() -> Generator[DynamoDBClient, None, None]:
 
 @pytest.fixture(scope="module", autouse=True)
 def handler() -> Callable[[S3Event, LambdaContext | None], Dict[str, Any]]:
+    # importing handler as a callback to ensure configs settings are proper
     from send_batch_email_event.main import lambda_handler
 
     return lambda_handler
