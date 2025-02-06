@@ -5,10 +5,10 @@ from typing import Dict, Any, List, Literal, Optional
 from http import HTTPStatus
 from collections import OrderedDict
 from .utils import (
-    format_and_filter_targets,
     generate_email_template,
     process_targets,
     generate_target_errors_payload,
+    S3Target,
 )
 from mypy_boto3_s3.type_defs import CopySourceTypeDef
 from jc_shared.utils import generate_handler_response, generate_csv
@@ -22,20 +22,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-def process_event(event: S3Event) -> Dict[str, Any]:
-    target_objects = format_and_filter_targets(event)
-
-    if not target_objects:
-        return generate_handler_response(
-            status_code=HTTPStatus.NO_CONTENT.value,
-            message="No valid targets found",
-        )
-
+def process_event(target_objects: List[S3Target]) -> Dict[str, Any]:
     target_errors: List[Dict[str, Any]] = []
     successful_recipients_count = 0
-
-    logger.info("successfully retrieved all targets from event")
-    logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
 
     for target in target_objects:  # open csv target and organize by N batch
         try:
@@ -145,7 +134,7 @@ def move_failed_objects(target_errors: List[Dict[str, Any]]):
                     },
                     "To": {
                         "Bucket": bucket,
-                        "Key": f"{config.BATCH_INITIATION_ERROR_S3_PREFIX}/{file_name}",
+                        "Key": config.BATCH_INITIATION_ERROR_S3_PREFIX + file_name,
                     },
                 }
             )
