@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Literal, Optional, cast, IO
 from botocore.exceptions import ClientError
 
 # custom modules
-from send_batch_email_event.config import config
+from config import config
 from jc_custom.boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
 from jc_custom.utils import S3Target
 

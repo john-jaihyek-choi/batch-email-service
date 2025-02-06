@@ -9,8 +9,8 @@ from collections import OrderedDict
 from mypy_boto3_s3.type_defs import CopySourceTypeDef
 
 # custom modules
-from send_batch_email_event.config import config
-from send_batch_email_event.utils import (
+from config import config
+from utils import (
     generate_email_template,
     process_targets,
     generate_target_errors_payload,

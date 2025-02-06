@@ -9,18 +9,13 @@ from aws_lambda_powertools.utilities.data_classes import S3Event
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 # custom modules
-from send_batch_email_event.config import config
-from send_batch_email_event.processor import process_event
+from config import config
+from processor import process_event
 from jc_custom.utils import generate_handler_response
 from jc_custom.utils import filter_s3_targets, S3Target
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
-
-allowed_buckets = tuple([config.BATCH_EMAIL_SERVICE_BUCKET_NAME])
-allowed_prefix = tuple(["batch/send/"])  # prefix must have trailing "/""
-allowed_suffix = tuple([".csv"])
-allowed_s3_events = tuple(["ObjectCreated"])
 
 
 def lambda_handler(
@@ -32,6 +27,11 @@ def lambda_handler(
 
         logger.info("event: %s", json.dumps(event, indent=2))
 
+        allowed_buckets = tuple([config.BATCH_EMAIL_SERVICE_BUCKET_NAME])
+        allowed_prefix = tuple(["batch/send/"])  # prefix must have trailing "/"
+        allowed_suffix = tuple([".csv"])
+        allowed_s3_events = tuple(["ObjectCreated"])
+
         target_objects: List[S3Target] = filter_s3_targets(
             event,
             allowed_buckets,
@@ -39,8 +39,6 @@ def lambda_handler(
             allowed_suffix,
             allowed_s3_events,
         )
-
-        logger.warning(target_objects)
 
         if not target_objects:
             return generate_handler_response(
