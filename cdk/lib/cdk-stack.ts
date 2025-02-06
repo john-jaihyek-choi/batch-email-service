@@ -10,7 +10,9 @@ import * as eventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
 import * as dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({
+  path: path.resolve(__dirname, "../lambdas/python/.env"),
+});
 
 type S3EventNotificationDestinations =
   | s3n.LambdaDestination
@@ -122,7 +124,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "send_batch_email_event.main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/send_batch_email_event")
+          path.join(__dirname, "../lambdas/python/send_batch_email_event/"),
+          {
+            exclude: ["**/__pycache__"],
+          }
         ),
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
@@ -149,7 +154,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "process_batch_email_event.main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_batch_email_event")
+          path.join(__dirname, "../lambdas/python/process_batch_email_event/"),
+          {
+            exclude: ["**/__pycache__"],
+          }
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -169,7 +177,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "schedule_batch_lambda.main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/schedule_batch_email")
+          path.join(__dirname, "../lambdas/python/schedule_batch_email/"),
+          {
+            exclude: ["**/__pycache__"],
+          }
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -195,7 +206,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "process_ses_template.main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_ses_template")
+          path.join(__dirname, "../lambdas/python/process_ses_template/"),
+          {
+            exclude: ["**/__pycache__"],
+          }
         ),
         environment: {
           LOG_LEVEL: "INFO",
