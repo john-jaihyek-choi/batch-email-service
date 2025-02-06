@@ -22,10 +22,10 @@ class S3Target(TypedDict):
 
 def filter_s3_targets(
     s3_event: S3Event,
-    allowed_buckets: Tuple[str],
-    allowed_prefix: Tuple[str],
-    allowed_suffix: Tuple[str],
-    allowed_s3_events: Tuple[str],
+    allowed_buckets: Tuple[str, ...],
+    allowed_prefix: Tuple[str, ...],
+    allowed_suffix: Tuple[str, ...],
+    allowed_s3_events: Tuple[str, ...],
 ) -> List[
     S3Target
 ]:  # retrieve all s3 targets in an S3Event and filter the relevant targets based on the allowed buckets, prefix, suffix, and s3 events.
