@@ -1,17 +1,16 @@
-from functools import lru_cache
-import urllib.parse
 import logging
 import csv
 import io
 import re
-from .config import config
+
+from functools import lru_cache
 from collections import OrderedDict
-from datetime import datetime, timezone
-from typing import Dict, List, Any, Literal, Optional, cast, IO, TypedDict, Tuple
-from aws_lambda_powertools.utilities.data_classes import S3Event
+from typing import Dict, List, Any, Literal, Optional, cast, IO
 from botocore.exceptions import ClientError
-from jc_shared.boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
-from jc_shared.utils import S3Target
+
+from send_batch_email_event.config import config
+from jc_custom.boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
+from jc_custom.utils import S3Target
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)

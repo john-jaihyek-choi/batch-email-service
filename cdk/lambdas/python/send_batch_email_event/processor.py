@@ -1,22 +1,22 @@
 import json
 import logging
-from .config import config
-from typing import Dict, Any, List, Literal, Optional
+
+from typing import Dict, Any, List, Literal
 from http import HTTPStatus
 from collections import OrderedDict
-from .utils import (
+from mypy_boto3_s3.type_defs import CopySourceTypeDef
+
+from send_batch_email_event.config import config
+from send_batch_email_event.utils import (
     generate_email_template,
     process_targets,
     generate_target_errors_payload,
-    S3Target,
 )
-from mypy_boto3_s3.type_defs import CopySourceTypeDef
-from jc_shared.utils import generate_handler_response, generate_csv
-from jc_shared.boto3_helper import (
+from jc_custom.utils import generate_handler_response, generate_csv, S3Target
+from jc_custom.boto3_helper import (
     send_ses_email,
     move_s3_objects,
 )
-from aws_lambda_powertools.utilities.data_classes import S3Event
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)

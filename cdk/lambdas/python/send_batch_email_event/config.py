@@ -1,6 +1,7 @@
 import os
 import logging
-from typing import List, Optional
+
+from typing import List
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
