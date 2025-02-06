@@ -3,173 +3,22 @@ import pytest
 import os
 import logging
 import json
-from typing import Callable, List, Dict, Any, Generator, cast
+from typing import List, Dict, Any
 from http import HTTPStatus
 
 # external libararies
-import boto3.exceptions
-import boto3
 from pytest import FixtureRequest
-from moto import mock_aws
 from mypy_boto3_sqs.client import SQSClient
 from mypy_boto3_s3.client import S3Client
-from mypy_boto3_ses.client import SESClient
-from mypy_boto3_dynamodb.client import DynamoDBClient
-from mypy_boto3_s3.literals import BucketLocationConstraintType
-from mypy_boto3_dynamodb.type_defs import WriteRequestUnionTypeDef
-from aws_lambda_powertools.utilities.data_classes import S3Event
-from aws_lambda_powertools.utilities.typing import LambdaContext
 from dotenv import load_dotenv
+
+# local modules
+from send_batch_email_event.main import lambda_handler
 
 load_dotenv()
 
 
-# Restrict external library logs to WARNING due to noise
-hide_logs = ["boto3_helper", "boto3", "urlib3", "botocore"]
-for module in hide_logs:
-    logging.getLogger(module).setLevel(logging.WARNING)
-
 logger = logging.getLogger(__name__)
-logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
-
-HandlerFunction = Callable[[Dict[str, Any], Any], Dict[str, Any]]
-
-
-# Fixtures
-@pytest.fixture(scope="module", autouse=True)
-def aws_credential_overwrite():
-    logger.info("Overwriting environment variables for testing...")
-
-    os.environ["BATCH_EMAIL_SERVICE_BUCKET_NAME"] = "test-mock-s3-bucket"
-    os.environ["TEST_EXAMPLE_BATCH_PATH"] = (
-        "/Users/jchoi950/Dev/web/batch-email-service/cdk/assets/batch/examples"
-    )
-    os.environ["TEST_EXAMPLE_TEMPLATE_PATH"] = (
-        "/Users/jchoi950/Dev/web/batch-email-service/cdk/assets/templates"
-    )
-    os.environ["TEST_EXAMPLE_DB_PATH"] = (
-        "/Users/jchoi950/Dev/web/batch-email-service/cdk/assets/db/example/example-db.json"
-    )
-    os.environ["TEMPLATE_METADATA_TABLE_NAME"] = "mock-ddb-table"
-
-
-@mock_aws
-@pytest.fixture(scope="module", autouse=True)
-def mocked_sqs() -> Generator[SQSClient, None, None]:
-    with mock_aws():
-        try:
-            sqs: SQSClient = boto3.client("sqs", os.getenv("AWS_DEFAULT_REGION"))
-            sqs.create_queue(QueueName=os.getenv("EMAIL_BATCH_QUEUE_NAME", ""))
-        except Exception as e:
-            pytest.fail(f"Failed setting up mock sqs {e}")
-        yield sqs
-
-
-@mock_aws
-@pytest.fixture(scope="module", autouse=True)
-def mocked_s3() -> Generator[S3Client, None, None]:
-    aws_region = cast(
-        BucketLocationConstraintType, os.getenv("AWS_DEFAULT_REGION", "us-east-2")
-    )
-    bucket_name: str = os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME", "")
-
-    with mock_aws():
-        try:
-            s3: S3Client = boto3.client("s3", aws_region)
-            s3.create_bucket(
-                Bucket=bucket_name,
-                CreateBucketConfiguration={
-                    "LocationConstraint": aws_region,
-                },
-            )
-
-            test_assets = [
-                {
-                    "local_path": os.getenv("TEST_EXAMPLE_BATCH_PATH", ""),
-                    "s3_prefix": "batch/send/",
-                },
-                {
-                    "local_path": os.getenv("TEST_EXAMPLE_TEMPLATE_PATH", ""),
-                    "s3_prefix": "templates/",
-                },
-            ]
-
-            for asset in test_assets:
-                upload_directory_to_mocked_s3(
-                    s3=s3,
-                    bucket_name=bucket_name,
-                    local_path=asset["local_path"],
-                    s3_prefix=asset["s3_prefix"],
-                )
-
-        except Exception as e:
-            pytest.fail(f"Failed setting up mock s3: {e}")
-
-        yield s3
-
-
-@pytest.fixture(scope="module", autouse=True)
-def mocked_ses() -> Generator[SESClient, None, None]:
-    # Initialize SES client
-    with mock_aws():
-        try:
-            ses: SESClient = boto3.client(
-                "ses", region_name=os.getenv("AWS_DEFAULT_REGION")
-            )
-            ses.verify_email_identity(EmailAddress=os.getenv("SES_NO_REPLY_SENDER", ""))
-        except Exception as e:
-            pytest.fail(f"Failed to setup ses client and/or verify email identity: {e}")
-        yield ses
-
-
-@pytest.fixture(scope="module", autouse=True)
-def mocked_ddb() -> Generator[DynamoDBClient, None, None]:
-    # Create table and put items
-    db_path: str = os.getenv("TEST_EXAMPLE_DB_PATH", "")
-
-    with mock_aws():
-        try:
-            table_name = os.getenv("TEMPLATE_METADATA_TABLE_NAME", "")
-
-            ddb: DynamoDBClient = boto3.client(
-                "dynamodb", region_name=os.getenv("AWS_DEFAULT_REGION")
-            )
-
-            ddb.create_table(
-                TableName=table_name,
-                AttributeDefinitions=[
-                    {"AttributeName": "template_key", "AttributeType": "S"},
-                ],
-                KeySchema=[{"AttributeName": "template_key", "KeyType": "HASH"}],
-                BillingMode="PAY_PER_REQUEST",
-            )
-
-            ddb.get_waiter("table_exists").wait(TableName=table_name)
-
-            batch_write_item: List[WriteRequestUnionTypeDef] = []
-
-            with open(db_path) as file:
-                rows = json.load(file)
-
-                for row in rows:
-                    batch_write_item.append({"PutRequest": {"Item": row}})
-
-            ddb.batch_write_item(
-                RequestItems={table_name: batch_write_item},
-                ReturnConsumedCapacity="TOTAL",
-            )
-
-        except Exception as e:
-            pytest.fail(f"Failed to setup mock ddb: {e}")
-        yield ddb
-
-
-@pytest.fixture(scope="module", autouse=True)
-def handler() -> Callable[[S3Event, LambdaContext | None], Dict[str, Any]]:
-    # importing handler as a callback to ensure configs settings are proper
-    from send_batch_email_event.main import lambda_handler
-
-    return lambda_handler
 
 
 # Test Cases
@@ -180,29 +29,26 @@ def handler() -> Callable[[S3Event, LambdaContext | None], Dict[str, Any]]:
         ("valid_multi_record_event", "Batch processing completed successfully"),
     ],
 )
-def test_valid_events(
-    request: FixtureRequest, handler: HandlerFunction, valid_events, expected_message
-):
+def test_valid_events(request: FixtureRequest, valid_events, expected_message):
     event = request.getfixturevalue(valid_events)
-    response = handler(event, {})
+    response = lambda_handler(event, {})
 
     assert response["StatusCode"] == HTTPStatus.OK
     assert response["Message"] == expected_message
 
 
-def test_partial_success(handler: HandlerFunction, partial_success_event):
-    response = handler(partial_success_event, {})
+def test_partial_success(partial_success_event):
+    response = lambda_handler(partial_success_event, {})
 
     assert response["StatusCode"] == HTTPStatus.PARTIAL_CONTENT
     assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
 
 
 def test_missing_required_csv_fields(
-    handler: HandlerFunction,
     mocked_s3: S3Client,
     missing_basic_required_csv_field_event: Dict[str, Any],
 ) -> None:
-    response = handler(missing_basic_required_csv_field_event, None)
+    response = lambda_handler(missing_basic_required_csv_field_event, None)
 
     body = json.loads(response.get("Body", ""))
     failed_batches = body.get("FailedBatches", [])
@@ -218,11 +64,10 @@ def test_missing_required_csv_fields(
 
 
 def test_missing_template_specific_csv_fields(
-    handler: HandlerFunction,
     mocked_s3: S3Client,
     missing_template_specific_field_event: Dict[str, Any],
 ) -> None:
-    response = handler(missing_template_specific_field_event, {})
+    response = lambda_handler(missing_template_specific_field_event, {})
 
     body = json.loads(response["Body"])
     failed_batches = body.get("FailedBatches", [])
@@ -237,26 +82,22 @@ def test_missing_template_specific_csv_fields(
     assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
 
 
-def test_empty_event(handler: HandlerFunction, empty_event: Dict[str, Any]) -> None:
-    response = handler(empty_event, {})
+def test_empty_event(empty_event: Dict[str, Any]) -> None:
+    response = lambda_handler(empty_event, {})
 
     assert response["StatusCode"] == HTTPStatus.BAD_REQUEST
     assert response["Message"] == "Invalid event: Missing 'Records' key"
 
 
-def test_empty_s3_content(
-    handler: HandlerFunction, empty_s3_content_event: Dict[str, Any]
-) -> None:
-    response = handler(empty_s3_content_event, {})
+def test_empty_s3_content(empty_s3_content_event: Dict[str, Any]) -> None:
+    response = lambda_handler(empty_s3_content_event, {})
 
     assert response["StatusCode"] == HTTPStatus.INTERNAL_SERVER_ERROR
     assert response["Message"] == "Failed processing the batches"
 
 
-def test_invalid_s3_event_name(
-    handler: HandlerFunction, invalid_event_name: Dict[str, Any]
-) -> None:
-    response = handler(invalid_event_name, {})
+def test_invalid_s3_event_name(invalid_event_name: Dict[str, Any]) -> None:
+    response = lambda_handler(invalid_event_name, {})
 
     assert response["StatusCode"] == HTTPStatus.NO_CONTENT
     assert response["Message"] == "No valid targets found"
@@ -584,19 +425,3 @@ def failed_s3_object_moved_successfully(
             return False
 
     return True
-
-
-def upload_directory_to_mocked_s3(
-    s3: S3Client, bucket_name: str, local_path: str, s3_prefix: str = ""
-):
-    # Walk through the local directory
-    for root, _, files in os.walk(local_path):
-        for file in files:
-            local_file_path = os.path.join(root, file)
-
-            # Get the relative path for S3 key
-            relative_path = os.path.relpath(local_file_path, local_path)
-            s3_key = os.path.join(s3_prefix, relative_path).replace("\\", "/")
-
-            # Upload file to mock S3
-            s3.upload_file(local_file_path, bucket_name, s3_key)
