@@ -120,7 +120,7 @@ export class CdkStack extends cdk.Stack {
       "SendBatchEmailEvent",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "main.lambda_handler",
+        handler: "send_batch_email_event.main.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(__dirname, "../lambdas/python/send_batch_email_event")
         ),
@@ -147,7 +147,7 @@ export class CdkStack extends cdk.Stack {
       "ProcessBatchEmailEvent",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "main.lambda_handler",
+        handler: "process_batch_email_event.main.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(__dirname, "../lambdas/python/process_batch_email_event")
         ),
@@ -167,7 +167,7 @@ export class CdkStack extends cdk.Stack {
       "ScheduleBatchEmail",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "main.lambda_handler",
+        handler: "schedule_batch_lambda.main.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(__dirname, "../lambdas/python/schedule_batch_email")
         ),
@@ -193,7 +193,7 @@ export class CdkStack extends cdk.Stack {
       "ProcessSesTemplate",
       {
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "lambda_function.lambda_handler",
+        handler: "process_ses_template.main.lambda_handler",
         code: lambda.Code.fromAsset(
           path.join(__dirname, "../lambdas/python/process_ses_template")
         ),
