@@ -126,7 +126,7 @@ export class CdkStack extends cdk.Stack {
         ),
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
-          BATCH_INITIATION_ERROR_S3_PREFIX: "batch/archive/error",
+          BATCH_INITIATION_ERROR_S3_PREFIX: "batch/archive/error/",
           SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY:
             "templates/send-batch-failure-email-template.html",
           SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY:
