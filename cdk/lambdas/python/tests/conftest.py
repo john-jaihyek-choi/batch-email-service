@@ -3,7 +3,7 @@ import pytest
 import os
 import logging
 import json
-from typing import Generator, cast, List
+from typing import Generator, cast, List, Dict, Any, TypedDict
 
 # external libararies
 import boto3.exceptions
@@ -16,6 +16,9 @@ from mypy_boto3_dynamodb.client import DynamoDBClient
 from mypy_boto3_s3.literals import BucketLocationConstraintType
 from mypy_boto3_dynamodb.type_defs import WriteRequestUnionTypeDef
 from dotenv import load_dotenv
+
+# local modules
+from tests.types import S3EventRecordPayload
 
 load_dotenv()
 
@@ -140,6 +143,48 @@ def mocked_ddb() -> Generator[DynamoDBClient, None, None]:
         except Exception as e:
             pytest.fail(f"Failed to setup mock ddb: {e}")
         yield ddb
+
+
+@pytest.fixture(scope="module")
+def generate_mock_s3_lambda_event():
+    def generate_records(records: List[S3EventRecordPayload]) -> Dict[str, Any]:
+        res = []
+
+        for record in records:
+            res.append(
+                {
+                    "eventVersion": "2.0",
+                    "eventSource": "aws:s3",
+                    "awsRegion": record["bucket_region"],
+                    "eventTime": "1970-01-01T00:00:00.000Z",
+                    "eventName": record["event_name"],
+                    "userIdentity": {"principalId": "EXAMPLE"},
+                    "requestParameters": {"sourceIPAddress": "127.0.0.1"},
+                    "responseElements": {
+                        "x-amz-request-id": "EXAMPLE123456789",
+                        "x-amz-id-2": "EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH",
+                    },
+                    "s3": {
+                        "s3SchemaVersion": "1.0",
+                        "configurationId": "testConfigRule",
+                        "bucket": {
+                            "name": record["bucket_name"],
+                            "ownerIdentity": {"principalId": "EXAMPLE"},
+                            "arn": f"arn:aws:s3:::{record["bucket_name"]}",
+                        },
+                        "object": {
+                            "key": record["object_key"],
+                            "size": 1024,
+                            "eTag": "0123456789abcdef0123456789abcdef",
+                            "sequencer": "0A1B2C3D4E5F678901",
+                        },
+                    },
+                }
+            )
+
+        return {"Records": res}
+
+    return generate_records
 
 
 def upload_directory_to_mocked_s3(
