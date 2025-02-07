@@ -1,2 +1,16 @@
 .DS_Store
 .pytest_cache
+.vscode/
+!vscode/settings.json  # ✅ Share workspace settings (formatter, linting rules)
+!vscode/extensions.json  # ✅ Recommended VS Code extensions
+node_modules
+.venv
+.env
+.pytest_cache
+__pycache__
+*.egg-info
+.mypy_cache
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
