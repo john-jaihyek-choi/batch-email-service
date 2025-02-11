@@ -4,7 +4,26 @@
             "S": "templates/send-batch-failure-email-template.html"
         },
         "fields": {
-            "S": "aggregate_error_rate,aggregate_success_rate,batch_success_details,aggregate_error_text,aggregate_success_text,attachment_list"
+            "L": [
+                {
+                    "S": "aggregate_error_rate"
+                },
+                {
+                    "S": "aggregate_success_rate"
+                },
+                {
+                    "S": "batch_success_details"
+                },
+                {
+                    "S": "aggregate_error_text"
+                },
+                {
+                    "S": "aggregate_success_text"
+                },
+                {
+                    "S": "attachment_list"
+                }
+            ]
         }
     },
     {
@@ -12,7 +31,20 @@
             "S": "templates/send-batch-failure-email-template.txt"
         },
         "fields": {
-            "S": "batch_success_details,aggregate_error_rate,aggregate_success_rate,attachment_list"
+            "L": [
+                {
+                    "S": "batch_success_details"
+                },
+                {
+                    "S": "aggregate_error_rate"
+                },
+                {
+                    "S": "aggregate_success_rate"
+                },
+                {
+                    "S": "attachment_list"
+                }
+            ]
         }
     },
     {
@@ -28,7 +60,14 @@
             "S": "templates/post-card-combined-template.html"
         },
         "fields": {
-            "S": "first_name,loan_type"
+            "L": [
+                {
+                    "S": "first_name"
+                },
+                {
+                    "S": "loan_type"
+                }
+            ]
         }
     }
 ]
