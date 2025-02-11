@@ -69,6 +69,9 @@ def get_s3_object(bucket_name: str, object_key: str) -> GetObjectOutputTypeDef:
     except s3.exceptions.NoSuchBucket:
         logger.exception(f"No bucket with name {bucket_name}")
         raise
+    except s3.exceptions.NoSuchKey:
+        logger.exception(f"No key with name {object_key}")
+        raise
     except ClientError as e:
         logger.exception(f"Unexpected Boto3 client error: {e}")
         raise
