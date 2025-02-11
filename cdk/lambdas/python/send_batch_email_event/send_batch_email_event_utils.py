@@ -280,15 +280,15 @@ def validate_template_fields(row: Dict[str, Any], ddb_table_name) -> List[str]:
     ddb_item: Dict[str, Any] | None = response.get("Item")
 
     # check ddb_item is valid, fields column is valid, and field is non-empty
-    if ddb_item and ddb_item["fields"] and ddb_item["fields"]["S"]:
+    if ddb_item and ddb_item["fields"] and ddb_item["fields"]["L"]:
         fields: Dict[str, Any] = ddb_item.get("fields", {})
-        fields_list: str | None = fields["S"]
+        fields_list: str | None = fields["L"]
 
         if fields_list:
-            for field in fields_list.split(","):
-                field = field.strip()
-                if field not in row or not row[field]:
-                    missing.append(field)
+            for field in fields_list:
+                field_name = field["S"]
+                if field_name not in row or not row[field_name]:
+                    missing.append(field_name)
 
     return missing
 
