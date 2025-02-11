@@ -93,6 +93,8 @@ def handle_target_errors(
     )
     attachments["plain-text-email"] = attachment_body
 
+    logger.info("sending ses email...")
+
     send_ses_email(
         send_from=config.SES_NO_REPLY_SENDER,
         send_to=config.SES_ADMIN_EMAIL,
@@ -112,9 +114,12 @@ def handle_target_errors(
             body={"FailedBatches": target_errors},
         )
 
+    logger.info(f"moving failed object s3 location {target_errors}")
+
     move_failed_objects(target_errors)
 
     logger.info("Failed processing the batches")
+
     return generate_handler_response(
         status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
         message="Failed processing the batches",

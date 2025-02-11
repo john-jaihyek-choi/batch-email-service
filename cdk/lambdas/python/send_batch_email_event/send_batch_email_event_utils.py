@@ -238,6 +238,8 @@ def process_targets(s3_target: S3Target) -> Dict[str, Any]:
 
                     logger.debug(f"sending batch {batch_number}...")
 
+                    logger.info("processing sqs message...")
+
                     send_sqs_message(
                         queue_name=config.EMAIL_BATCH_QUEUE_NAME,
                         message_body=message,
