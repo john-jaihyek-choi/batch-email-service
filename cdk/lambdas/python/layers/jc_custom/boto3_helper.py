@@ -5,7 +5,7 @@ import boto3
 import boto3.exceptions
 from botocore.exceptions import ClientError
 from collections import defaultdict, OrderedDict
-from typing import Dict, Any, List, Literal, Optional
+from typing import Dict, Any, List, Literal, Optional, Mapping
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -20,7 +20,10 @@ from mypy_boto3_s3.type_defs import (
     ObjectIdentifierTypeDef,
 )
 from mypy_boto3_sqs.type_defs import SendMessageResultTypeDef
-from mypy_boto3_dynamodb.type_defs import GetItemOutputTypeDef
+from mypy_boto3_dynamodb.type_defs import (
+    GetItemOutputTypeDef,
+    UniversalAttributeValueTypeDef,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
@@ -33,20 +36,7 @@ ses: SESV2Client = boto3.client("sesv2", aws_region)
 ddb: DynamoDBClient = boto3.client("dynamodb", aws_region)
 
 
-def get_s3_object(bucket_name: str, object_key: str) -> GetObjectOutputTypeDef:
-    try:
-        return s3.get_object(Bucket=bucket_name, Key=object_key)
-    except s3.exceptions.NoSuchBucket:
-        logger.exception(f"No bucket with name {bucket_name}")
-        raise
-    except ClientError as e:
-        logger.exception(f"Unexpected Boto3 client error: {e}")
-        raise
-    except boto3.exceptions.Boto3Error as e:
-        logger.exception(f"Boto3 library error: {e}")
-        raise
-
-
+# DynamoDB Operations
 def get_ddb_item(table_name: str, pk: str) -> GetItemOutputTypeDef:
     try:
         return ddb.get_item(TableName=table_name, Key={"template_key": {"S": pk}})
@@ -61,17 +51,42 @@ def get_ddb_item(table_name: str, pk: str) -> GetItemOutputTypeDef:
         raise
 
 
+def put_ddb_item(table_name: str, item: Mapping[str, UniversalAttributeValueTypeDef]):
+    try:
+        return ddb.put_item(TableName=table_name, Item=item)
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 library error: {e}")
+        raise
+
+
+# S3 Operations
+def get_s3_object(bucket_name: str, object_key: str) -> GetObjectOutputTypeDef:
+    try:
+        return s3.get_object(Bucket=bucket_name, Key=object_key)
+    except s3.exceptions.NoSuchBucket:
+        logger.exception(f"No bucket with name {bucket_name}")
+        raise
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 library error: {e}")
+        raise
+
+
 def move_s3_objects(
     targets: List[Dict[Literal["From", "To"], CopySourceTypeDef]]
 ) -> None:
     delete_list: Dict[str, List[ObjectIdentifierTypeDef]] = defaultdict(list)
-
-    logger.info("copying targets...")
     for target in targets:
         source = target["From"]
         destination = target["To"]
 
         try:
+            logger.debug(f"copying {source} to {destination}")
             s3.copy_object(
                 Bucket=destination["Bucket"],
                 CopySource=source,
@@ -82,7 +97,7 @@ def move_s3_objects(
         except Exception as e:
             logger.exception(f"Error copying s3 object - {target}: {e}")
 
-    logger.info("cleaning up source objects...")
+    logger.debug(f"cleaning up source objects... {delete_list}")
     # delete the object once copy is complete
     for bucket, deleting_objects in delete_list.items():
         try:
@@ -91,13 +106,12 @@ def move_s3_objects(
             logger.exception(f"Error deleting s3 objects - {deleting_objects}: {e}")
 
 
+# SQS Operations
 def send_sqs_message(
     queue_name: str,
     message_body: Any,
 ) -> SendMessageResultTypeDef:
     try:
-        logger.info("processing sqs message...")
-
         queue_url = sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
         response = sqs.send_message(
             QueueUrl=queue_url, MessageBody=json.dumps(message_body)
@@ -155,6 +169,8 @@ def send_ses_email(
         msg["Subject"] = subject
         msg.attach(MIMEText(body, body_type))
 
+        logger.debug(f"attaching csvs... {attachments}")
+
         # attach csv attachments to MIMEMultipart
         for filename, content in attachments.items():
             part = MIMEBase("application", "octet-stream")
@@ -168,6 +184,10 @@ def send_ses_email(
             part.add_header("Content-ID", f"<{file_name}>")
             msg.attach(part)
 
+        logger.debug(f"attached all csv {msg}")
+
+        logger.debug(f"sending ses email...")
+
         ses.send_email(
             FromEmailAddress=send_from,
             Destination={
@@ -175,6 +195,8 @@ def send_ses_email(
             },
             Content={"Raw": {"Data": msg.as_string()}},
         )
+        logger.debug(f"successfully sent all emails")
+
     except ClientError as e:
         logger.exception(f"Unexpected Boto3 client error: {e}")
     except boto3.exceptions.Boto3Error as e:
