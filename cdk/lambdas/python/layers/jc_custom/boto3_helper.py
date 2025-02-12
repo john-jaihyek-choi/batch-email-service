@@ -71,17 +71,12 @@ def put_ddb_item(table_name: str, item: Mapping[str, UniversalAttributeValueType
 def get_s3_object(
     bucket_name: str,
     object_key: str,
-    encode: Optional[bool] = False,
     encoding_type: Optional[EnabledEncodingTypes] = "utf-8",
-) -> StreamingBody | str:
+) -> str:
     try:
         res = s3.get_object(Bucket=bucket_name, Key=object_key)
-        body = res["Body"]
 
-        if encode:
-            return body.read().decode(encoding_type)
-
-        return body
+        return res["Body"].read().decode(encoding_type)
     except s3.exceptions.NoSuchBucket:
         logger.exception(f"No bucket with name {bucket_name}")
         raise
