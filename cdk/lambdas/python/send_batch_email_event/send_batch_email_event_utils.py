@@ -173,7 +173,7 @@ def get_template_metadata(ddb_table_name: str, primary_key: str):
     return get_ddb_item(ddb_table_name, primary_key)
 
 
-def process_targets(s3_target: S3Target) -> Dict[str, Any]:
+def process_batch(s3_target: S3Target) -> Dict[str, Any]:
     try:
         recipients_per_message = config.RECIPIENTS_PER_MESSAGE
 

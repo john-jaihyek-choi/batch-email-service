@@ -11,7 +11,7 @@ from mypy_boto3_s3.type_defs import CopySourceTypeDef
 # custom modules
 from send_batch_email_event_config import config
 from send_batch_email_event_utils import (
-    process_targets,
+    process_batch,
     generate_target_errors_payload,
     generate_template_replacement_pattern,
 )
@@ -26,17 +26,15 @@ from jc_custom.boto3_helper import send_ses_email, move_s3_objects, get_s3_objec
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
-logger.warning("OR IS THIS RUNNING?")
 
-
-def process_event(target_objects: List[S3Target]) -> Dict[str, Any]:
+def process_targets(target_objects: List[S3Target]) -> Dict[str, Any]:
     target_errors: List[Dict[str, Any]] = []
     successful_recipients_count = 0
 
     for target in target_objects:  # open csv target and organize by N batch
         try:
             logger.info(f"Target processing: {json.dumps(target, indent=2)}")
-            batch = process_targets(target)
+            batch = process_batch(target)
             target_path: str = batch.get("Target", "unknown target")
             error_batch: List[Dict[str, Any]] = batch.get("Errors", [])
 
