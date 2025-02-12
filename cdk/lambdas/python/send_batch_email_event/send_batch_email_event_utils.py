@@ -82,79 +82,83 @@ def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in
         yield batch, row_errors
 
 
-def generate_email_template(
-    s3_bucket: str,
-    s3_key: str,
+def generate_template_replacement_pattern(
     target_errors: List[Dict[str, Any]],
     template_type: Optional[Literal["html", "txt"]] = "txt",
+) -> Dict[str, str]:
+    attachments, batch_success_details = [], []
+    aggregate_success_count, aggregate_error_count = 0, 0
+
+    for target in target_errors:
+        target_path: str = target.get("Target", "")
+        file_name = target_path.split("/")[-1]
+
+        success_count, error_count = target.get("SuccessCount", 0), target.get(
+            "ErrorCount", 0
+        )
+        total_count = success_count + error_count
+        aggregate_success_count += success_count
+        aggregate_error_count += error_count
+
+        if template_type == "html":
+            batch_success_details.append(
+                f"<li>{file_name} – {error_count} of {total_count} rows failed</li>"
+            )
+
+            attachments.append(f"<li><a>{file_name}</a></li>")
+        else:
+            batch_success_details.append(
+                f"- {error_count} of {total_count} rows failed\n"
+            )
+            attachments.append(f"- {file_name}\n")
+
+    aggregate_total_count = aggregate_success_count + aggregate_error_count
+    aggregate_error_rate = round(aggregate_error_count / aggregate_total_count * 100)
+    aggregate_success_rate = round(
+        aggregate_success_count / aggregate_total_count * 100
+    )
+
+    # replacement key-val pair (key = variables in html, val = value to be replaced to)
+    replacements = {
+        "aggregate_success_rate": f"{aggregate_success_rate}",
+        "aggregate_error_rate": f"{aggregate_error_rate}",
+        "aggregate_success_text": (
+            f'<div class="bar-success" style="width: {aggregate_success_rate}%">{aggregate_success_rate}%</div>'
+            if aggregate_success_rate
+            else ""
+        ),
+        "aggregate_error_text": (
+            f'<div class="bar-failed" style="width: {aggregate_error_rate}%">{aggregate_error_rate}%</div>'
+            if aggregate_error_rate
+            else ""
+        ),
+        "attachment_list": f"{"".join(attachments)}",
+        "batch_success_details": f"{"".join(batch_success_details)}",
+    }
+
+    return replacements
+
+
+def autofill_email_template(
+    template_s3_bucket: str, template_s3_key: str, replacement_mapping: Dict[str, str]
 ) -> str:
     try:
-        file = get_s3_object(s3_bucket, s3_key)
+        file = get_s3_object(template_s3_bucket, template_s3_key)
         template = file["Body"].read().decode("utf-8")
 
-        attachments, batch_success_details = [], []
-        aggregate_success_count, aggregate_error_count = 0, 0
+        pattern = r"{{(" + "|".join(map(re.escape, replacement_mapping.keys())) + r")}}"
 
-        for target in target_errors:
-            target_path: str = target.get("Target", "")
-            file_name = target_path.split("/")[-1]
-
-            success_count, error_count = target.get("SuccessCount", 0), target.get(
-                "ErrorCount", 0
-            )
-            total_count = success_count + error_count
-            aggregate_success_count += success_count
-            aggregate_error_count += error_count
-
-            if template_type == "html":
-                batch_success_details.append(
-                    f"<li>{file_name} – {error_count} of {total_count} rows failed</li>"
-                )
-
-                attachments.append(f"<li><a>{file_name}</a></li>")
-            else:
-                batch_success_details.append(
-                    f"- {error_count} of {total_count} rows failed\n"
-                )
-                attachments.append(f"- {file_name}\n")
-
-        aggregate_total_count = aggregate_success_count + aggregate_error_count
-        aggregate_error_rate = round(
-            aggregate_error_count / aggregate_total_count * 100
-        )
-        aggregate_success_rate = round(
-            aggregate_success_count / aggregate_total_count * 100
-        )
-
-        # replacement key-val pair (key = variables in html, val = value to be replaced to)
-        replacements = {
-            "{{aggregate_success_rate}}": (f"{aggregate_success_rate}"),
-            "{{aggregate_error_rate}}": (f"{aggregate_error_rate}"),
-            "{{aggregate_success_text}}": (
-                f'<div class="bar-success" style="width: {aggregate_success_rate}%">{aggregate_success_rate}%</div>'
-                if aggregate_success_rate
-                else ""
-            ),
-            "{{aggregate_error_text}}": (
-                f'<div class="bar-failed" style="width: {aggregate_error_rate}%">{aggregate_error_rate}%</div>'
-                if aggregate_error_rate
-                else ""
-            ),
-            "{{attachment_list}}": f"{"".join(attachments)}",
-            "{{batch_success_details}}": f"{"".join(batch_success_details)}",
-        }
-
-        # replace key-val pairs in replacements from the template
+        # replace key-val pairs in replacement_mapping from the template
         template = re.sub(
-            r"{{(aggregate_success_rate|aggregate_error_rate|aggregate_success_text|aggregate_error_text|attachment_list|batch_success_details)}}",
-            lambda match: replacements.get(match.group(0), match.group(0)),
+            pattern,
+            lambda match: replacement_mapping.get(match.group(1), match.group(0)),
             template,
         )
-        logger.debug(template)
+        logger.warning(template)
         return template
     except Exception as e:
         logger.exception(f"Error generating template: {e}")
-        return ""
+        return "Unexpected error while generating performance summary"
 
 
 def generate_target_errors_payload(
