@@ -14,12 +14,11 @@ from send_batch_email_event_utils import (
     generate_email_template,
     process_targets,
     generate_target_errors_payload,
+    generate_template_replacement_pattern,
+    autofill_email_template,
 )
 from jc_custom.utils import generate_handler_response, generate_csv, S3Target
-from jc_custom.boto3_helper import (
-    send_ses_email,
-    move_s3_objects,
-)
+from jc_custom.boto3_helper import send_ses_email, move_s3_objects, get_s3_object
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
@@ -82,16 +81,21 @@ def handle_target_errors(
     html_template_key = config.SEND_BATCH_EMAIL_FAILURE_HTML_TEMPLATE_KEY
     text_template_key = config.SEND_BATCH_EMAIL_FAILURE_TEXT_TEMPLATE_KEY
 
-    # generate html email template (to be attached to the email)
-    body = generate_email_template(
-        template_bucket, html_template_key, target_errors, "html"
+    html_template_replacements = generate_template_replacement_pattern(
+        target_errors, "html"
+    )
+    text_template_replacements = generate_template_replacement_pattern(
+        target_errors, "txt"
     )
 
-    # generate text email template (to be attached to the email)
-    attachment_body = generate_email_template(
-        template_bucket, text_template_key, target_errors, "txt"
+    html_body = autofill_email_template(
+        template_bucket, html_template_key, html_template_replacements
     )
-    attachments["plain-text-email"] = attachment_body
+    txt_body = autofill_email_template(
+        template_bucket, text_template_key, text_template_replacements
+    )
+
+    attachments["plain-text-email"] = txt_body
 
     logger.info("sending ses email...")
 
@@ -99,7 +103,7 @@ def handle_target_errors(
         send_from=config.SES_NO_REPLY_SENDER,
         send_to=config.SES_ADMIN_EMAIL,
         subject="Batch Email Service - Email Initiation Failed",
-        body=body,
+        body=html_body,
         attachments=attachments,
         body_type="html",
     )
@@ -156,3 +160,14 @@ def move_failed_objects(target_errors: List[Dict[str, Any]]):
 
     except Exception as e:
         logger.exception(f"Error moving s3 objects: {e}")
+
+
+def retrieve_template_from_s3(s3_bucket_name: str, s3_key: str):
+    try:
+        file = get_s3_object(s3_bucket_name, s3_key)
+        template = file["Body"].read().decode("utf-8")
+
+    except Exception as e:
+        logger.exception(
+            f"Unexpected failure retrieving {s3_bucket_name}/{s3_key}: {e}"
+        )
