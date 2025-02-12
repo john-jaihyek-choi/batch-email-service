@@ -31,11 +31,11 @@ def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) 
             lambda match: replacement_mapping.get(match.group(1), match.group(0)),
             template,
         )
-        logger.warning(template)
+
         return template
     except Exception as e:
         logger.exception(f"Error generating template: {e}")
-        return "Unexpected error while generating performance summary"
+        return "Unexpected error while autofilling email template"
 
 
 def filter_s3_targets(
