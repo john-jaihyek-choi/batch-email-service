@@ -11,13 +11,16 @@ from mypy_boto3_s3.type_defs import CopySourceTypeDef
 # custom modules
 from send_batch_email_event_config import config
 from send_batch_email_event_utils import (
-    generate_email_template,
     process_targets,
     generate_target_errors_payload,
     generate_template_replacement_pattern,
-    autofill_email_template,
 )
-from jc_custom.utils import generate_handler_response, generate_csv, S3Target
+from jc_custom.utils import (
+    autofill_email_template,
+    generate_handler_response,
+    generate_csv,
+    S3Target,
+)
 from jc_custom.boto3_helper import send_ses_email, move_s3_objects, get_s3_object
 
 logger = logging.getLogger(__name__)
@@ -89,10 +92,12 @@ def handle_target_errors(
     )
 
     html_body = autofill_email_template(
-        template_bucket, html_template_key, html_template_replacements
+        retrieve_template_from_s3(template_bucket, html_template_key),
+        html_template_replacements,
     )
     txt_body = autofill_email_template(
-        template_bucket, text_template_key, text_template_replacements
+        retrieve_template_from_s3(template_bucket, text_template_key),
+        text_template_replacements,
     )
 
     attachments["plain-text-email"] = txt_body
@@ -162,10 +167,11 @@ def move_failed_objects(target_errors: List[Dict[str, Any]]):
         logger.exception(f"Error moving s3 objects: {e}")
 
 
-def retrieve_template_from_s3(s3_bucket_name: str, s3_key: str):
+def retrieve_template_from_s3(s3_bucket_name: str, s3_key: str) -> str:
     try:
         file = get_s3_object(s3_bucket_name, s3_key)
-        template = file["Body"].read().decode("utf-8")
+
+        return file["Body"].read().decode("utf-8")
 
     except Exception as e:
         logger.exception(
