@@ -3,6 +3,7 @@ import logging
 import csv
 import io
 import os
+import re
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, KeysView, TypedDict, Tuple
@@ -18,6 +19,23 @@ class S3Target(TypedDict):
     Object: str
     PrincipalId: str
     Timestamp: str  # ISO format: "YYYYMMDD_HHMMSS"
+
+
+def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) -> str:
+    try:
+        pattern = r"{{(" + "|".join(map(re.escape, replacement_mapping.keys())) + r")}}"
+
+        # replace key-val pairs in replacement_mapping from the template
+        template = re.sub(
+            pattern,
+            lambda match: replacement_mapping.get(match.group(1), match.group(0)),
+            template,
+        )
+        logger.warning(template)
+        return template
+    except Exception as e:
+        logger.exception(f"Error generating template: {e}")
+        return "Unexpected error while generating performance summary"
 
 
 def filter_s3_targets(

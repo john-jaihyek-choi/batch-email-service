@@ -139,28 +139,6 @@ def generate_template_replacement_pattern(
     return replacements
 
 
-def autofill_email_template(
-    template_s3_bucket: str, template_s3_key: str, replacement_mapping: Dict[str, str]
-) -> str:
-    try:
-        file = get_s3_object(template_s3_bucket, template_s3_key)
-        template = file["Body"].read().decode("utf-8")
-
-        pattern = r"{{(" + "|".join(map(re.escape, replacement_mapping.keys())) + r")}}"
-
-        # replace key-val pairs in replacement_mapping from the template
-        template = re.sub(
-            pattern,
-            lambda match: replacement_mapping.get(match.group(1), match.group(0)),
-            template,
-        )
-        logger.warning(template)
-        return template
-    except Exception as e:
-        logger.exception(f"Error generating template: {e}")
-        return "Unexpected error while generating performance summary"
-
-
 def generate_target_errors_payload(
     target: str,
     error_detail: str,
