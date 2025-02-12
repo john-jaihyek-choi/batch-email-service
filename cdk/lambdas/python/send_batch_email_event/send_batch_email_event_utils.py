@@ -195,7 +195,7 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
         )
 
         # wrap s3 object body as IO for it to be read in place
-        wrapper = io.TextIOWrapper(cast(IO[bytes], csv_content), encoding="utf-8")
+        wrapper = io.StringIO(csv_content)
 
         logger.info(f"grouping recipients by {recipients_per_message}...")
 

@@ -121,7 +121,8 @@ def handle_target_errors(
             body={"FailedBatches": target_errors},
         )
 
-    logger.info(f"moving failed object s3 location {target_errors}")
+    logger.info(f"moving failed object s3 location...")
+    logger.debug(f"target_errors: {target_errors}")
 
     move_failed_objects(target_errors)
 
