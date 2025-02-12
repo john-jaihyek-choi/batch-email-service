@@ -190,12 +190,12 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
         target_path = f"{bucket_name}/{prefix}{object}"
 
         logger.info(f"getting {target_path}...")
-        s3_object = get_s3_object(
+        csv_content = get_s3_object(
             bucket_name=bucket_name, object_key=f"{prefix}{object}"
         )
 
         # wrap s3 object body as IO for it to be read in place
-        wrapper = io.TextIOWrapper(cast(IO[bytes], s3_object["Body"]), encoding="utf-8")
+        wrapper = io.TextIOWrapper(cast(IO[bytes], csv_content), encoding="utf-8")
 
         logger.info(f"grouping recipients by {recipients_per_message}...")
 
