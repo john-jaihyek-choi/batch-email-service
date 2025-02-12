@@ -90,11 +90,11 @@ def handle_target_errors(
     )
 
     html_body = autofill_email_template(
-        retrieve_template_from_s3(template_bucket, html_template_key),
+        get_s3_object(template_bucket, html_template_key),
         html_template_replacements,
     )
     txt_body = autofill_email_template(
-        retrieve_template_from_s3(template_bucket, text_template_key),
+        get_s3_object(template_bucket, text_template_key),
         text_template_replacements,
     )
 
@@ -163,15 +163,3 @@ def move_failed_objects(target_errors: List[Dict[str, Any]]):
 
     except Exception as e:
         logger.exception(f"Error moving s3 objects: {e}")
-
-
-def retrieve_template_from_s3(s3_bucket_name: str, s3_key: str) -> str:
-    try:
-        file = get_s3_object(s3_bucket_name, s3_key)
-
-        return file["Body"].read().decode("utf-8")
-
-    except Exception as e:
-        logger.exception(
-            f"Unexpected failure retrieving {s3_bucket_name}/{s3_key}: {e}"
-        )
