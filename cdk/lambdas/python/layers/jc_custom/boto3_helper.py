@@ -15,10 +15,10 @@ from mypy_boto3_s3.client import S3Client
 from mypy_boto3_sesv2.client import SESV2Client
 from mypy_boto3_dynamodb.client import DynamoDBClient
 from mypy_boto3_s3.type_defs import (
-    GetObjectOutputTypeDef,
     CopySourceTypeDef,
     ObjectIdentifierTypeDef,
 )
+from botocore.response import StreamingBody
 from mypy_boto3_sqs.type_defs import SendMessageResultTypeDef
 from mypy_boto3_dynamodb.type_defs import (
     GetItemOutputTypeDef,
@@ -34,6 +34,11 @@ sqs: SQSClient = boto3.client("sqs", aws_region)
 s3: S3Client = boto3.client("s3", aws_region)
 ses: SESV2Client = boto3.client("sesv2", aws_region)
 ddb: DynamoDBClient = boto3.client("dynamodb", aws_region)
+
+EnabledEncodingTypes = Literal[
+    "utf-8",
+    "ascii",
+]
 
 
 # DynamoDB Operations
@@ -63,9 +68,20 @@ def put_ddb_item(table_name: str, item: Mapping[str, UniversalAttributeValueType
 
 
 # S3 Operations
-def get_s3_object(bucket_name: str, object_key: str) -> GetObjectOutputTypeDef:
+def get_s3_object(
+    bucket_name: str,
+    object_key: str,
+    encode: Optional[bool] = False,
+    encoding_type: Optional[EnabledEncodingTypes] = "utf-8",
+) -> StreamingBody | str:
     try:
-        return s3.get_object(Bucket=bucket_name, Key=object_key)
+        res = s3.get_object(Bucket=bucket_name, Key=object_key)
+        body = res["Body"]
+
+        if encode:
+            return body.read().decode(encoding_type)
+
+        return body
     except s3.exceptions.NoSuchBucket:
         logger.exception(f"No bucket with name {bucket_name}")
         raise
