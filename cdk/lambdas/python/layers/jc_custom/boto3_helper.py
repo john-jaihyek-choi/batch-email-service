@@ -3,6 +3,8 @@ import logging
 import os
 import boto3
 import boto3.exceptions
+import threading
+from functools import lru_cache
 from botocore.exceptions import ClientError
 from collections import defaultdict, OrderedDict
 from typing import Dict, Any, List, Literal, Optional, Mapping
@@ -18,7 +20,6 @@ from mypy_boto3_s3.type_defs import (
     CopySourceTypeDef,
     ObjectIdentifierTypeDef,
 )
-from botocore.response import StreamingBody
 from mypy_boto3_sqs.type_defs import SendMessageResultTypeDef
 from mypy_boto3_dynamodb.type_defs import (
     GetItemOutputTypeDef,
@@ -28,12 +29,7 @@ from mypy_boto3_dynamodb.type_defs import (
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
-aws_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
-
-sqs: SQSClient = boto3.client("sqs", aws_region)
-s3: S3Client = boto3.client("s3", aws_region)
-ses: SESV2Client = boto3.client("sesv2", aws_region)
-ddb: DynamoDBClient = boto3.client("dynamodb", aws_region)
+aws_default_region = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
 
 EnabledEncodingTypes = Literal[
     "utf-8",
@@ -41,9 +37,55 @@ EnabledEncodingTypes = Literal[
 ]
 
 
+class AWSClients:
+    """Lazy instantiation of AWS clients"""
+
+    _instance = None
+    _lock = threading.Lock()  # threadlock at initial instantitation
+
+    def __new__(cls):
+        if not cls._instance:
+            with cls._lock:  # if locked, perform further check
+                if not cls._instance:  # double check if instance exists
+                    cls._instance = super(AWSClients, cls).__new__(
+                        cls
+                    )  # set singleton instance
+        return cls._instance
+
+    def preload_aws_clients(
+        self, services: List[str], region: Optional[str] = aws_default_region
+    ):
+        logger.warning(f"Pre-loading {services} clients...")
+        for service in services:
+            self.get_client(service, region)
+
+    @lru_cache(maxsize=None)
+    def get_client(
+        self,
+        service: str,
+        region: Optional[str] = None,
+    ) -> Any:
+        region = region or aws_default_region
+
+        client = boto3.client(service, region_name=region)
+        logger.warning(
+            f"Initializing {service.upper()} client for {region}... {id(client)}"
+        )
+
+        return client
+
+    def reset_all_clients(self):
+        logger.debug("Resetting all AWS clients...")
+        self.get_client.cache_clear()
+
+
 # DynamoDB Operations
-def get_ddb_item(table_name: str, pk: str) -> GetItemOutputTypeDef:
+def get_ddb_item(
+    table_name: str, pk: str, aws_region: Optional[str] = aws_default_region
+) -> GetItemOutputTypeDef:
     try:
+        ddb: DynamoDBClient = aws_client.get_client("dynamodb", region=aws_region)
+
         return ddb.get_item(TableName=table_name, Key={"template_key": {"S": pk}})
     except ddb.exceptions.ResourceNotFoundException:
         logger.exception(f"No item with key {pk} found")
@@ -56,8 +98,14 @@ def get_ddb_item(table_name: str, pk: str) -> GetItemOutputTypeDef:
         raise
 
 
-def delete_ddb_item(table_name: str, key: Mapping[str, UniversalAttributeValueTypeDef]):
+def delete_ddb_item(
+    table_name: str,
+    key: Mapping[str, UniversalAttributeValueTypeDef],
+    aws_region: Optional[str] = aws_default_region,
+):
     try:
+        ddb: DynamoDBClient = aws_client.get_client("dynamodb", region=aws_region)
+
         return ddb.delete_item(TableName=table_name, Key=key)
     except ClientError as e:
         logger.exception(f"Unexpected Boto3 client error: {e}")
@@ -67,8 +115,14 @@ def delete_ddb_item(table_name: str, key: Mapping[str, UniversalAttributeValueTy
         raise
 
 
-def put_ddb_item(table_name: str, item: Mapping[str, UniversalAttributeValueTypeDef]):
+def put_ddb_item(
+    table_name: str,
+    item: Mapping[str, UniversalAttributeValueTypeDef],
+    aws_region: Optional[str] = aws_default_region,
+):
     try:
+        ddb: DynamoDBClient = aws_client.get_client("dynamodb", region=aws_region)
+
         return ddb.put_item(TableName=table_name, Item=item)
     except ClientError as e:
         logger.exception(f"Unexpected Boto3 client error: {e}")
@@ -83,8 +137,11 @@ def get_s3_object(
     bucket_name: str,
     object_key: str,
     encoding_type: Optional[EnabledEncodingTypes] = "utf-8",
+    aws_region: Optional[str] = aws_default_region,
 ) -> str:
     try:
+        s3: S3Client = aws_client.get_client("s3", region=aws_region)
+
         res = s3.get_object(Bucket=bucket_name, Key=object_key)
 
         return res["Body"].read().decode(encoding_type)
@@ -103,8 +160,11 @@ def get_s3_object(
 
 
 def move_s3_objects(
-    targets: List[Dict[Literal["From", "To"], CopySourceTypeDef]]
+    targets: List[Dict[Literal["From", "To"], CopySourceTypeDef]],
+    aws_region: Optional[str] = aws_default_region,
 ) -> None:
+    s3: S3Client = aws_client.get_client("s3", region=aws_region)
+
     delete_list: Dict[str, List[ObjectIdentifierTypeDef]] = defaultdict(list)
     for target in targets:
         source = target["From"]
@@ -133,10 +193,11 @@ def move_s3_objects(
 
 # SQS Operations
 def send_sqs_message(
-    queue_name: str,
-    message_body: Any,
+    queue_name: str, message_body: Any, aws_region: Optional[str] = aws_default_region
 ) -> SendMessageResultTypeDef:
     try:
+        sqs: SQSClient = aws_client.get_client("sqs", region=aws_region)
+
         queue_url = sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
         response = sqs.send_message(
             QueueUrl=queue_url, MessageBody=json.dumps(message_body)
@@ -161,6 +222,7 @@ def send_ses_email(
     body: str,
     attachments: OrderedDict[str, str],
     body_type: Literal["html", "plain"] = "plain",
+    aws_region: Optional[str] = aws_default_region,
 ) -> None:
     """
     Sends an email using Amazon SES with optional attachments.
@@ -188,6 +250,7 @@ def send_ses_email(
         Exception: Propagates exceptions encountered while sending the email.
     """
     try:
+        sesv2: SESV2Client = aws_client.get_client("sesv2", region=aws_region)
         msg = MIMEMultipart("mixed")
         msg["From"] = send_from
         msg["To"] = send_to
@@ -213,7 +276,7 @@ def send_ses_email(
 
         logger.debug(f"sending ses email...")
 
-        ses.send_email(
+        sesv2.send_email(
             FromEmailAddress=send_from,
             Destination={
                 "ToAddresses": send_to.split(","),
@@ -226,3 +289,6 @@ def send_ses_email(
         logger.exception(f"Unexpected Boto3 client error: {e}")
     except boto3.exceptions.Boto3Error as e:
         logger.error(f"Boto3 error at send_email_to_admin: {e}")
+
+
+aws_client = AWSClients()
