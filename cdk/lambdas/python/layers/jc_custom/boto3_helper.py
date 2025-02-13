@@ -56,6 +56,17 @@ def get_ddb_item(table_name: str, pk: str) -> GetItemOutputTypeDef:
         raise
 
 
+def delete_ddb_item(table_name: str, key: Mapping[str, UniversalAttributeValueTypeDef]):
+    try:
+        return ddb.delete_item(TableName=table_name, Key=key)
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 library error: {e}")
+        raise
+
+
 def put_ddb_item(table_name: str, item: Mapping[str, UniversalAttributeValueTypeDef]):
     try:
         return ddb.put_item(TableName=table_name, Item=item)
@@ -167,7 +178,7 @@ def send_ses_email(
         body_type (Literal["html", "plain"], optional): The format of the email body.
             Use "html" for HTML content or "plain" for plain text. Defaults to "plain".
         attachments (Dict[str, str], optional): A dictionary where the keys are
-            filenames and the values are the paths to the files or the file content.
+            filenames and the values are the file content.
             Defaults to an empty dictionary (no attachments).
 
     Returns:
