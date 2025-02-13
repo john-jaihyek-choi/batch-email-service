@@ -19,6 +19,7 @@ class S3Target(TypedDict):
     Object: str
     PrincipalId: str
     Timestamp: str  # ISO format: "YYYYMMDD_HHMMSS"
+    EventName: str
 
 
 def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) -> str:
@@ -83,6 +84,7 @@ def filter_s3_targets(
                     "Object": object,
                     "PrincipalId": principal_id,
                     "Timestamp": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
+                    "EventName": event_type,
                 }
             )
 
