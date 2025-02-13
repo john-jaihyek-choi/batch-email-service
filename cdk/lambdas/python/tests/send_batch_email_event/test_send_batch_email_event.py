@@ -41,7 +41,7 @@ def test_valid_events(request: FixtureRequest, valid_events, expected_message):
 def test_partial_success(partial_success_event):
     response = lambda_handler(partial_success_event, {})
 
-    assert response["StatusCode"] == HTTPStatus.PARTIAL_CONTENT
+    assert response["StatusCode"] == HTTPStatus.OK
     assert len(json.loads(response["Body"])["FailedBatches"][0]) > 0
 
 

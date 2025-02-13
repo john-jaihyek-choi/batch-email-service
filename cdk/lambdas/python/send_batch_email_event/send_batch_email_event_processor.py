@@ -116,7 +116,7 @@ def handle_target_errors(
     ):  # handle partial success case (x out of total recipients successful scenario)
         logger.info("partially processed the batches")
         return generate_handler_response(
-            status_code=HTTPStatus.PARTIAL_CONTENT.value,
+            status_code=HTTPStatus.OK.value,
             message="Batch partially processed",
             body={"FailedBatches": target_errors},
         )
