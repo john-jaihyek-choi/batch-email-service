@@ -19,17 +19,16 @@ from jc_custom.utils import generate_handler_response, filter_s3_targets, S3Targ
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
-logger.warning("running ses main")
 
 
 def lambda_handler(
     event: S3Event, context: Optional[LambdaContext] = None
 ) -> Dict[str, Any]:
+    logger.info("event: %s", json.dumps(event, indent=2))
+
     try:
         if not event or not event.get("Records"):
             raise ValueError("Invalid event: Missing 'Records' key")
-
-        logger.info("event: %s", json.dumps(event, indent=2))
 
         allowed_buckets = tuple([config.BATCH_EMAIL_SERVICE_BUCKET_NAME])
         allowed_prefix = tuple(["templates/"])  # prefix must have trailing "/""
@@ -39,6 +38,10 @@ def lambda_handler(
         target_objects: List[S3Target] = filter_s3_targets(
             event, allowed_buckets, allowed_prefix, allowed_suffix, allowed_s3_events
         )
+
+        if not target_objects:
+            logger.info("No valid target objects detected")
+            return generate_handler_response(HTTPStatus.NO_CONTENT.value)
 
         response = process_targets(target_objects)
 

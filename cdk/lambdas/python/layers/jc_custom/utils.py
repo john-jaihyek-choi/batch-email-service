@@ -111,7 +111,7 @@ def generate_csv(headers: KeysView[str], contents: List[Dict[str, Any]]) -> str:
 
 
 def generate_handler_response(
-    status_code: int, message: str, body: Optional[Dict[Any, Any]] = None
+    status_code: int, message: Optional[str] = "", body: Optional[Any] = ""
 ):
     try:
         response = {
