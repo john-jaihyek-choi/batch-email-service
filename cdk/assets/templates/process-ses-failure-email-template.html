@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Batch Email Operation Report</title>
+    <title>Template Update Status Report</title>
     <style>
         body {
           font-family: Arial, sans-serif;
@@ -19,7 +19,7 @@
           box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         .header {
-          background-color: #0073e6;
+          background-color: #5400e6;
           color: #ffffff;
           padding: 20px;
           text-align: center;
@@ -38,7 +38,7 @@
           margin: 20px 0;
           padding: 10px;
           background: #f9f9f9;
-          border-left: 4px solid #0073e6;
+          border-left: 4px solid #5400e6;
         }
         .chart-container {
           text-align: center;
@@ -120,20 +120,19 @@
   <body>
     <div class="container">
       <div class="header">
-        <h1>Batch Initiation Error Report</h1>
-        <p>Detailed Summary of Batch Initiation</p>
+        <h1>Template Update Status Report</h1>
+        <p>Summary of Template Update Result</p>
       </div>
       <div class="content">
         <h2>Summary</h2>
-        <p>There was an issue processing the following batches:</p>
         <ul>
-          {{batch_success_details}}
+          {{template_update_result}}
         </ul>
 
         <div class="chart-container">
           <h3>Performance Summary</h3>
           <div class="bar-chart">
-            {{aggregate_error_text}} {{aggregate_success_text}}
+            {{aggregate_error_rate}} {{aggregate_success_rate}}
           </div>
           <div class="legend">
             <div class="legend-item">
@@ -145,14 +144,6 @@
               <span>Success</span>
             </div>
           </div>
-        </div>
-
-        <div class="attachment-section">
-          <h3>Attachments</h3>
-          <p>Below are the CSV files containing detailed error logs:</p>
-          <ul>
-            {{attachment_list}}
-          </ul>
         </div>
       </div>
       <div class="footer">
