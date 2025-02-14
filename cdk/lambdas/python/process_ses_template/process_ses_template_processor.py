@@ -31,12 +31,6 @@ TemplateMetadataFields = List[Dict[Literal["S"], str]]
 
 
 def process_targets(s3_targets: List[S3Target]) -> Dict[str, Any]:
-    # General steps:
-    # 1. get the S3 object target
-    # 2. scan through the content and look for dynamic variables
-    # 3. update ddb with the metdata
-    # 4. send test ses to the admin email
-    # 5. return success response
     table_name = config.TEMPLATE_METADATA_TABLE_NAME
     target_processed: List[Dict[str, Any]] = []
 
@@ -99,11 +93,24 @@ def process_targets(s3_targets: List[S3Target]) -> Dict[str, Any]:
 
     send_ses_template_status_report(target_processed)
 
-    logger.info(f"Upload status email sent successfully via SES!")
+    successfully_processed = sum(target["success"] for target in target_processed)
 
-    return generate_handler_response(
-        HTTPStatus.OK.value, "Template update completed successfully"
-    )
+    if successfully_processed == 0:  # no successfully processed target
+        logger.info("Template process failed")
+        return generate_handler_response(
+            HTTPStatus.INTERNAL_SERVER_ERROR.value, "Template update failed"
+        )
+    elif successfully_processed != len(target_processed):  # partially successful
+        logger.info("Template update partially completed")
+        return generate_handler_response(
+            HTTPStatus.OK.value, "Template update partially successful"
+        )
+    else:
+        logger.info(f"Upload status email sent successfully via SES!")
+
+        return generate_handler_response(
+            HTTPStatus.OK.value, "Template update completed successfully"
+        )
 
 
 def send_ses_template_status_report(processed_targets: List[Dict[str, Any]]) -> None:
