@@ -205,15 +205,6 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 - [ ] End to end testing
   - [ ] send batch emails
   - [ ] upload/delete templates
-- [ ] Monitoring
-  - Create custom metrics for SES (Optional)
-    - [ ] email delivery success rates
-    - [ ] SES bounce/complaint rates
-    - [ ] SQS message failures (via DLQ)
-    - [ ] set up CloudWatch alarms
-- [ ] Optimization and Scaling
-  - [ ] tune SQS and Lambda batch size appropriately
-  - [ ] SES production mode request and rate limit increase based on required loads per day
 - [ ] CDK Infrastructure Finalization
   - [ ] Review the CDK stack and add all missing resources to manage via CDK deployment
 - [ ] Documentation Update
@@ -232,6 +223,15 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
 
 ##### Future Enhancement
 
+- [ ] Monitoring
+  - Create custom metrics for SES (Optional)
+    - [ ] email delivery success rates
+    - [ ] SES bounce/complaint rates
+    - [ ] SQS message failures (via DLQ)
+    - [ ] set up CloudWatch alarms
+- [ ] Optimization and Scaling
+  - [ ] tune SQS and Lambda batch size appropriately
+  - [ ] SES production mode request and rate limit increase based on required loads per day
 - [ ] Error Handling
   - [ ] automate handling of failed messages in DLQ (preferably via Lambda)
 - [ ] Frontend Update
