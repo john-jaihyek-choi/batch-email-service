@@ -4,7 +4,6 @@
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
 <!-- PROJECT LOGO -->
@@ -59,7 +58,6 @@ Body section for Update -->
     </li>
     <!-- <li><a href="#usage">Usage</a></li> -->
     <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
     <!-- <li><a href="#acknowledgments">Acknowledgments</a></li> -->
   </ol>
@@ -171,16 +169,16 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
     - [x] N recipients / message (SQS message)
     - [x] SES for failure notification via email using html template (SES)
     - [x] Delete/retire fully failed batches in s3
-    - [ ] LRU caching for template-specific field DDB lookups
+    - [x] LRU caching for template-specific field DDB lookups
   - [x] CDK Resource provisioning
     - [x] Lambda execution role and policy settings
     - [x] Lambda function and configuration
 - [ ] Template processor Lambda (ProcessSESTemplate)
   - [ ] Test cases
-  - [ ] Logic implementation
-    - [ ] s3 event for CREATE/PUT and DELETE
-    - [ ] scan template content and collect dynamic variables
-    - [ ] create/update/delete template metadata to ddb
+  - [x] Logic implementation
+    - [x] s3 event for CREATE/PUT and DELETE
+    - [x] scan template content and collect dynamic variables
+    - [x] create/update/delete template metadata to ddb
   - [ ] CDK Resource provisioning
     - [ ] DDB table creation
     - [ ] Lambda execution role and policy setting
@@ -317,14 +315,6 @@ For any suggestion or enhancement requests, please fork the repo and create a pu
 <a href="https://github.com/john-jaihyek-choi/batch-email-service/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=john-jaihyek-choi/batch-email-service" />
 </a>
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- LICENSE -->
-
-## License
-
-Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
