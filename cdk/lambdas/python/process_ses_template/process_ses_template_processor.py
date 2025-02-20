@@ -120,8 +120,8 @@ def send_ses_template_status_report(processed_targets: List[Dict[str, Any]]) -> 
         admin_email_txt_template_key,
     ) = (
         config.BATCH_EMAIL_SERVICE_BUCKET_NAME,
-        config.PROCESS_SES_TEAMPLATE_FAILURE_HTML_TEMPLATE_KEY,
-        config.PROCESS_SES_TEAMPLATE_FAILURE_TEXT_TEMPLATE_KEY,
+        config.PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY,
+        config.PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY,
     )
 
     fields_mapping = generate_template_mapping(processed_targets)

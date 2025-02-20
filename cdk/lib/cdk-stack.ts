@@ -216,7 +216,16 @@ export class CdkStack extends cdk.Stack {
         ),
         environment: {
           LOG_LEVEL: "INFO",
-          AWS_DEFAULT_REGION: "",
+          SES_NO_REPLY_SENDER: "no-reply@johnjhc.com",
+          SES_ADMIN_EMAIL: "jchoi950@yahoo.com",
+          BATCH_EMAIL_SERVICE_BUCKET_NAME:
+            process.env.BATCH_EMAIL_SERVICE_BUCKET_NAME!,
+          TEMPLATE_METADATA_TABLE_NAME:
+            process.env.TEMPLATE_METADATA_TABLE_NAME!,
+          PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY:
+            process.env.PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY!,
+          PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY:
+            process.env.PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY!,
         },
       }
     );
