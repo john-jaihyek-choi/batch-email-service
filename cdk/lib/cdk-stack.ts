@@ -142,6 +142,9 @@ export class CdkStack extends cdk.Stack {
           RECIPIENTS_PER_MESSAGE: "50",
           LOG_LEVEL: "INFO",
           EMAIL_REQUIRED_FIELDS: process.env.EMAIL_REQUIRED_FIELDS!,
+          AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION!,
+          TEMPLATE_METADATA_TABLE_NAME:
+            process.env.TEMPLATE_METADATA_TABLE_NAME!,
         },
         role: sendBatchEmailEventRole,
       }
@@ -213,6 +216,7 @@ export class CdkStack extends cdk.Stack {
         ),
         environment: {
           LOG_LEVEL: "INFO",
+          AWS_DEFAULT_REGION: "",
         },
       }
     );

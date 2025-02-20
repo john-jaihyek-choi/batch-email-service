@@ -9,7 +9,6 @@ logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 class Config:
     EMAIL_BATCH_QUEUE_NAME: str = os.getenv("EMAIL_BATCH_QUEUE_NAME", "")
-    DLQ_QUEUE_NAME: str = os.getenv("DLQ_QUEUE_NAME", "")
     RECIPIENTS_PER_MESSAGE: int = int(os.getenv("RECIPIENTS_PER_MESSAGE", 50))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     AWS_DEFAULT_REGION: str = os.getenv("AWS_DEFAULT_REGION", "us-east-2")
@@ -27,7 +26,6 @@ class Config:
     BATCH_INITIATION_ERROR_S3_PREFIX: str = os.getenv(
         "BATCH_INITIATION_ERROR_S3_PREFIX", ""
     )
-    BATCH_PROCESS_ERROR_S3_PREFIX: str = os.getenv("BATCH_PROCESS_ERROR_S3_PREFIX", "")
     EMAIL_REQUIRED_FIELDS: List[str] = os.getenv("EMAIL_REQUIRED_FIELDS", "").split(",")
     TEMPLATE_METADATA_TABLE_NAME: str = os.getenv("TEMPLATE_METADATA_TABLE_NAME", "")
 
