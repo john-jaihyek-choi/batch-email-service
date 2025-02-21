@@ -43,7 +43,7 @@ def logger_setup():
 @pytest.fixture(scope="module", autouse=True)
 def mocked_aws():
     with mock_aws():
-        logger.warning("Starting mock_aws session...")
+        logger.info("Starting mock_aws session...")
         # Any pre-load configurations if needed
         yield
 
