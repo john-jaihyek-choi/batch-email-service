@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-def process_targets(target_objects: List[S3Target]) -> Dict[str, Any]:
+def process_s3_targets(target_objects: List[S3Target]) -> Dict[str, Any]:
     target_errors: List[Dict[str, Any]] = []
     successful_recipients_count = 0
 
