@@ -10,7 +10,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 
 # custom modules
 from send_batch_email_event.send_batch_email_event_config import config
-from send_batch_email_event.send_batch_email_event_processor import process_targets
+from send_batch_email_event.send_batch_email_event_processor import process_s3_targets
 from jc_custom.utils import generate_handler_response
 from jc_custom.utils import filter_s3_targets, S3Target
 
@@ -49,7 +49,7 @@ def lambda_handler(
         logger.info("successfully retrieved all targets from event")
         logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
 
-        response = process_targets(target_objects)
+        response = process_s3_targets(target_objects)
 
         return response
 
