@@ -13,7 +13,7 @@ from process_ses_template_config import (
     config,
 )
 from process_ses_template_processor import (
-    process_targets,
+    process_s3_targets,
 )
 from jc_custom.utils import generate_handler_response, filter_s3_targets, S3Target
 
@@ -43,7 +43,7 @@ def lambda_handler(
             logger.info("No valid target objects detected")
             return generate_handler_response(HTTPStatus.NO_CONTENT.value)
 
-        response = process_targets(target_objects)
+        response = process_s3_targets(target_objects)
 
         return response
 

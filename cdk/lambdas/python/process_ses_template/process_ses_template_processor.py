@@ -30,7 +30,7 @@ class ProcessedTarget(TypedDict):
 TemplateMetadataFields = List[Dict[Literal["S"], str]]
 
 
-def process_targets(s3_targets: List[S3Target]) -> Dict[str, Any]:
+def process_s3_targets(s3_targets: List[S3Target]) -> Dict[str, Any]:
     table_name = config.TEMPLATE_METADATA_TABLE_NAME
     target_processed: List[Dict[str, Any]] = []
 
