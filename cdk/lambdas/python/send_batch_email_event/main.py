@@ -43,7 +43,7 @@ def lambda_handler(
         if not target_objects:
             return generate_handler_response(
                 status_code=HTTPStatus.NO_CONTENT.value,
-                message="No valid targets found",
+                message="No valid s3 targets found",
             )
 
         logger.info("successfully retrieved all targets from event")
