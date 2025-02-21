@@ -124,11 +124,12 @@ def send_ses_template_status_report(processed_targets: List[Dict[str, Any]]) -> 
         config.PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY,
     )
 
-    fields_mapping = generate_template_mapping(processed_targets)
+    html_fields_mapping = generate_template_mapping(processed_targets, "html")
+    txt_fields_mapping = generate_template_mapping(processed_targets, "txt")
 
     ses_html_body = autofill_email_template(
         get_s3_object(batch_email_service_bucket_name, admin_email_html_template_key),
-        fields_mapping,
+        html_fields_mapping,
     )
 
     attachments = {
@@ -136,7 +137,7 @@ def send_ses_template_status_report(processed_targets: List[Dict[str, Any]]) -> 
             get_s3_object(
                 batch_email_service_bucket_name, admin_email_txt_template_key
             ),
-            fields_mapping,
+            txt_fields_mapping,
         )
     }
 
@@ -167,7 +168,9 @@ def extract_required_fields_from_s3(
     return [{"S": field} for field in required_fields]
 
 
-def generate_template_mapping(target_processed: List[ProcessedTarget]):
+def generate_template_mapping(
+    target_processed: List[ProcessedTarget], for_type: Literal["html", "txt"]
+):
     success_count, total_count = 0, len(target_processed)
     template_process_details: List[str] = []
 
@@ -179,12 +182,33 @@ def generate_template_mapping(target_processed: List[ProcessedTarget]):
         )
         success_count += success
 
-        template_process_details.append(f"<li>{template_key} - {message}</li>")
+        if for_type == "html":
+            template_process_details.append(f"<li>{template_key} - {message}</li>")
+        else:
+            template_process_details.append(f"{template_key} - {message}")
 
     aggregate_error_rate = round((total_count - success_count) / total_count * 100)
+    aggregate_success_rate = 100 - aggregate_error_rate
+
+    aggregate_success_text = (
+        f'<div class="bar-success" style="width: {aggregate_success_rate}%">{aggregate_success_rate}%</div>'
+        if aggregate_success_rate
+        else ""
+    )
+    aggregate_error_text = (
+        f'<div class="bar-failed" style="width: {aggregate_error_rate}%">{aggregate_error_rate}%</div>'
+        if aggregate_error_rate
+        else ""
+    )
 
     return {
-        "template_upload_result": "".join(template_process_details),
+        "template_update_result": "".join(template_process_details),
         "aggregate_error_rate": str(aggregate_error_rate),
         "aggregate_success_rate": str(100 - aggregate_error_rate),
+        "aggregate_success_text": (
+            aggregate_success_text if for_type == "html" else aggregate_success_rate
+        ),
+        "aggregate_error_text": (
+            aggregate_error_text if for_type == "html" else aggregate_error_rate
+        ),
     }
