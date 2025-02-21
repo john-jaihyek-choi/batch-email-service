@@ -24,7 +24,9 @@ class S3Target(TypedDict):
 
 def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) -> str:
     try:
-        pattern = r"{{(" + "|".join(map(re.escape, replacement_mapping.keys())) + r")}}"
+        pattern = (
+            r"\{\{(" + "|".join(map(re.escape, replacement_mapping.keys())) + r")\}\}"
+        )
 
         # replace key-val pairs in replacement_mapping from the template
         template = re.sub(
