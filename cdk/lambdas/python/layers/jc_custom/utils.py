@@ -28,12 +28,16 @@ def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) 
             r"\{\{(" + "|".join(map(re.escape, replacement_mapping.keys())) + r")\}\}"
         )
 
+        logger.debug(f"autofill pattern - {pattern}")
+
         # replace key-val pairs in replacement_mapping from the template
         template = re.sub(
             pattern,
             lambda match: replacement_mapping.get(match.group(1), match.group(0)),
             template,
         )
+
+        logger.debug(f"updated template - {template}")
 
         return template
     except Exception as e:
@@ -50,7 +54,7 @@ def filter_s3_targets(
 ) -> List[
     S3Target
 ]:  # retrieve all s3 targets in an S3Event and filter the relevant targets based on the allowed buckets, prefix, suffix, and s3 events.
-    logger.info("formatting and filtering s3 tagets...")
+    logger.debug("formatting and filtering s3 tagets...")
 
     res: List[S3Target] = []
 
@@ -100,8 +104,17 @@ def filter_s3_targets(
     return res
 
 
-def generate_csv(headers: KeysView[str], contents: List[Dict[str, Any]]) -> str:
-    # Generate CSV content in memory
+def generate_csv(
+    headers: KeysView[str], contents: List[Dict[str, Any]]
+) -> str:  # Generate CSV content in memory
+    logger.debug(
+        f"generating csv in memory. {
+        {
+            "headers": headers,
+            "contents": contents
+        }
+    }"
+    )
     try:
         output = io.StringIO()
         csv_writer = csv.DictWriter(output, fieldnames=headers)
