@@ -83,24 +83,20 @@ export class CdkStack extends cdk.Stack {
         bucketName: `${applicationName}-resource-bucket`,
         lifecycleRules: [s3BucketLifeCycleRule],
         versioned: true,
-        autoDeleteObjects: true,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: false,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
       }
     );
 
-    // Deploy initial asset files to S3 bucket
-    const batchEmailBucket = new s3d.BucketDeployment(
-      stack,
-      "InitialAssetDeployment",
-      {
-        destinationBucket: jcBatchEmailServiceBucket,
-        sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
-        exclude: ["**/.DS_Store", "*.DS_Store"],
-      }
-    );
+    // Deploys initial asset files to S3 bucket
+    new s3d.BucketDeployment(stack, "InitialAssetDeployment", {
+      destinationBucket: jcBatchEmailServiceBucket,
+      sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
+      exclude: ["**/.DS_Store", "*.DS_Store"],
+    });
 
-    // // IAM Policies:
-    // sendBatchEmailEvent Lambda Execution Roles:
+    // IAM:
+    //// sendBatchEmailEvent Lambda Execution Roles:
     const sendBatchEmailEventRole = new iam.Role(
       stack,
       "SendBatchEmailEventRole",
@@ -109,22 +105,22 @@ export class CdkStack extends cdk.Stack {
       }
     );
 
-    // AWS managed basic lambda execution role
+    //// AWS managed basic lambda execution role
     sendBatchEmailEventRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName(
         "service-role/AWSLambdaBasicExecutionRole"
       )
     );
 
-    // S3 policy
+    //// S3 policy
     sendBatchEmailEventRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ["s3:GetObject", "s3:DeleteObject", "s3:PutObject"],
-        resources: [`${batchEmailBucket.deployedBucket.bucketArn}/*`],
+        resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
       })
     );
 
-    // SES policy
+    //// SES policy
     sendBatchEmailEventRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ["ses:SendRawEmail"],
@@ -141,7 +137,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/send_batch_email_event")
+          path.join(__dirname, "../lambdas/python/send_batch_email_event"),
+          {
+            exclude: ["**/__pycache__/*", "__pycache__"],
+          }
         ),
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
@@ -170,7 +169,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_batch_email_event/")
+          path.join(__dirname, "../lambdas/python/process_batch_email_event"),
+          {
+            exclude: ["**/__pycache__/*", "__pycache__"],
+          }
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -191,7 +193,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/schedule_batch_email/")
+          path.join(__dirname, "../lambdas/python/schedule_batch_email"),
+          {
+            exclude: ["**/__pycache__/*", "__pycache__"],
+          }
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -218,7 +223,10 @@ export class CdkStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_12,
         handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_ses_template/")
+          path.join(__dirname, "../lambdas/python/process_ses_template"),
+          {
+            exclude: ["**/__pycache__/*", "__pycache__"],
+          }
         ),
         environment: {
           LOG_LEVEL: "INFO",
