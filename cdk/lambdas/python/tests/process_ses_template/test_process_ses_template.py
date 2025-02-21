@@ -55,25 +55,25 @@ def valid_template_create_events(
     records: List[S3EventRecordPayload] = [
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectCreated:Put",
         },
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectCreated:Post",
         },
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectCreated:Copy",
         },
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectCreated:CompleteMultipartUpload",
         },
@@ -89,13 +89,13 @@ def valid_template_remove_events(
     records: List[S3EventRecordPayload] = [
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectRemoved:Delete",
         },
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectRemoved:DeleteMarkerCreated",
         },
@@ -143,7 +143,7 @@ def unsupported_event_type(
     records: List[S3EventRecordPayload] = [
         {
             "bucket_name": os.getenv("BATCH_EMAIL_SERVICE_BUCKET_NAME"),
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectRestore:Post",
         }
@@ -185,7 +185,7 @@ def incorrect_bucket(
     records: List[S3EventRecordPayload] = [
         {
             "bucket_name": "non-existent-bucket-name",
-            "object_key": "templates/post-card-combined-template.html",
+            "object_key": "templates/system/post-card-combined-template.html",
             "bucket_region": os.getenv("AWS_DEFAULT_REGION"),
             "event_name": "ObjectCreated:Put",
         },

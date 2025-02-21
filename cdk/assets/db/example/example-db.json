@@ -1,7 +1,7 @@
 [
     {
         "template_key": {
-            "S": "templates/send-batch-failure-email-template.html"
+            "S": "templates/system/send-batch-failure-email-template.html"
         },
         "fields": {
             "L": [
@@ -28,7 +28,7 @@
     },
     {
         "template_key": {
-            "S": "templates/send-batch-failure-email-template.txt"
+            "S": "templates/system/send-batch-failure-email-template.txt"
         },
         "fields": {
             "L": [
@@ -49,15 +49,7 @@
     },
     {
         "template_key": {
-            "S": "templates/simple-text-template-1.txt"
-        },
-        "fields": {
-            "S": ""
-        }
-    },
-    {
-        "template_key": {
-            "S": "templates/post-card-combined-template.html"
+            "S": "templates/system/post-card-combined-template.html"
         },
         "fields": {
             "L": [
