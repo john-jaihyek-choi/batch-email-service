@@ -55,40 +55,47 @@ def filter_s3_targets(
     res: List[S3Target] = []
 
     for record in s3_event["Records"]:
-        event_type: str = record["eventName"]
-        bucket_name: str = record["s3"]["bucket"]["name"]
-        s3_object_key: str = record["s3"]["object"]["key"].split("/")
-        principal_id: str = record["userIdentity"]["principalId"]
+        try:
+            event_type: str = record["eventName"]
+            bucket_name: str = record["s3"]["bucket"]["name"]
+            s3_object_key: str = record["s3"]["object"]["key"].split("/")
+            principal_id: str = record["userIdentity"]["principalId"]
 
-        prefix = "/".join(s3_object_key[:-1]) + "/"  # get s3 object prefix
-        object = urllib.parse.unquote(s3_object_key[-1])  # get object (file) name
+            prefix = "/".join(s3_object_key[:-1]) + "/"  # get s3 object prefix
+            object = urllib.parse.unquote(s3_object_key[-1])  # get object (file) name
 
-        if (
-            "s3" in record
-            and ("*" in allowed_buckets or bucket_name in allowed_buckets)
-            and (
-                "*" in allowed_prefix
-                or any(prefix.startswith(allowed) for allowed in allowed_prefix)
-            )
-            and (
-                "*" in allowed_suffix
-                or any(object.endswith(allowed) for allowed in allowed_suffix)
-            )
-            and (
-                "*" in allowed_s3_events
-                or any(event_type.startswith(allowed) for allowed in allowed_s3_events)
-            )
-        ):
-            res.append(
-                {
-                    "BucketName": bucket_name,
-                    "Prefix": prefix,
-                    "Object": object,
-                    "PrincipalId": principal_id,
-                    "Timestamp": datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
-                    "EventName": event_type,
-                }
-            )
+            if (
+                "s3" in record
+                and ("*" in allowed_buckets or bucket_name in allowed_buckets)
+                and (
+                    "*" in allowed_prefix
+                    or any(prefix.startswith(allowed) for allowed in allowed_prefix)
+                )
+                and (
+                    "*" in allowed_suffix
+                    or any(object.endswith(allowed) for allowed in allowed_suffix)
+                )
+                and (
+                    "*" in allowed_s3_events
+                    or any(
+                        event_type.startswith(allowed) for allowed in allowed_s3_events
+                    )
+                )
+            ):
+                res.append(
+                    {
+                        "BucketName": bucket_name,
+                        "Prefix": prefix,
+                        "Object": object,
+                        "PrincipalId": principal_id,
+                        "Timestamp": datetime.now(timezone.utc).strftime(
+                            "%Y%m%d_%H%M%S"
+                        ),
+                        "EventName": event_type,
+                    }
+                )
+        except Exception as e:
+            logger.exception(f"Error filtering s3 target. Skipping record - {record}")
 
     return res
 
