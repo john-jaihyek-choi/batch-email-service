@@ -5,6 +5,7 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 import * as s3d from "aws-cdk-lib/aws-s3-deployment";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as ddb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as eventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as path from "path";
@@ -34,22 +35,33 @@ export class CdkStack extends cdk.Stack {
 
     const app = new cdk.App();
     const stack = new cdk.Stack(app, "BatchEmailServiceMainStack");
+    const applicationName = "batch-email-service";
 
     const awsRegion = stack.region;
     const accountId = stack.account;
 
-    // SQS Queues:
-    const failedEmailBatchQueue: sqs.Queue = new sqs.Queue(
+    // DDB Table:
+    const TemplateMetadataDDBTable = new ddb.TableV2(
       stack,
-      "EmailBatchDLQ",
+      "TemplateMetadataDDBTable",
       {
-        queueName: "EmailBatchDLQ",
-        retentionPeriod: cdk.Duration.days(14),
+        tableName: "batch-email-service_template-metadata",
+        partitionKey: {
+          name: "template_key",
+          type: ddb.AttributeType.STRING,
+        },
+        removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
       }
     );
 
-    const emailBatchQueue: sqs.Queue = new sqs.Queue(stack, "EmailBatchQueue", {
-      queueName: "EmailBatchQueue",
+    // SQS Queues:
+    const failedEmailBatchQueue = new sqs.Queue(stack, "EmailBatchDLQ", {
+      queueName: `${applicationName}_email-batch-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    const emailBatchQueue = new sqs.Queue(stack, "EmailBatchQueue", {
+      queueName: `${applicationName}_email-batch-queue`,
       deadLetterQueue: {
         queue: failedEmailBatchQueue,
         maxReceiveCount: 1,
@@ -59,15 +71,16 @@ export class CdkStack extends cdk.Stack {
     });
 
     // S3 Buckets:
-    const s3BucketLifeCycleRule: s3.LifecycleRule = {
+    const s3BucketLifeCycleRule = {
       abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
       expiredObjectDeleteMarker: true,
     };
 
-    const jcBatchEmailServiceBucket: s3.Bucket = new s3.Bucket(
+    const jcBatchEmailServiceBucket = new s3.Bucket(
       stack,
       "BatchEmailServiceBucket",
       {
+        bucketName: `${applicationName}-resource-bucket`,
         lifecycleRules: [s3BucketLifeCycleRule],
         versioned: true,
         autoDeleteObjects: true,
@@ -78,7 +91,7 @@ export class CdkStack extends cdk.Stack {
     // Deploy initial asset files to S3 bucket
     const batchEmailBucket = new s3d.BucketDeployment(
       stack,
-      "DeployInitialAssets",
+      "InitialAssetDeployment",
       {
         destinationBucket: jcBatchEmailServiceBucket,
         sources: [s3d.Source.asset(path.join(__dirname, "../assets"))],
@@ -95,12 +108,14 @@ export class CdkStack extends cdk.Stack {
         assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
       }
     );
+
     // AWS managed basic lambda execution role
     sendBatchEmailEventRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName(
         "service-role/AWSLambdaBasicExecutionRole"
       )
     );
+
     // S3 policy
     sendBatchEmailEventRole.addToPolicy(
       new iam.PolicyStatement({
@@ -108,6 +123,7 @@ export class CdkStack extends cdk.Stack {
         resources: [`${batchEmailBucket.deployedBucket.bucketArn}/*`],
       })
     );
+
     // SES policy
     sendBatchEmailEventRole.addToPolicy(
       new iam.PolicyStatement({
@@ -117,17 +133,15 @@ export class CdkStack extends cdk.Stack {
     );
 
     // Lambdas:
-    const sendBatchEmailEvent: lambda.Function = new lambda.Function(
+    const sendBatchEmailEvent = new lambda.Function(
       stack,
       "SendBatchEmailEvent",
       {
+        functionName: `${applicationName}_send-batch-email-event`,
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "send_batch_email_event.main.lambda_handler",
+        handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/send_batch_email_event/"),
-          {
-            exclude: ["**/__pycache__"],
-          }
+          path.join(__dirname, "../lambdas/python/send_batch_email_event")
         ),
         environment: {
           BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
@@ -142,25 +156,21 @@ export class CdkStack extends cdk.Stack {
           RECIPIENTS_PER_MESSAGE: "50",
           LOG_LEVEL: "INFO",
           EMAIL_REQUIRED_FIELDS: process.env.EMAIL_REQUIRED_FIELDS!,
-          AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION!,
-          TEMPLATE_METADATA_TABLE_NAME:
-            process.env.TEMPLATE_METADATA_TABLE_NAME!,
+          TEMPLATE_METADATA_TABLE_NAME: TemplateMetadataDDBTable.tableName,
         },
         role: sendBatchEmailEventRole,
       }
     );
 
-    const processBatchEmailEvent: lambda.Function = new lambda.Function(
+    const processBatchEmailEvent = new lambda.Function(
       stack,
       "ProcessBatchEmailEvent",
       {
+        functionName: `${applicationName}_process-batch-email-event`,
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "process_batch_email_event.main.lambda_handler",
+        handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_batch_email_event/"),
-          {
-            exclude: ["**/__pycache__"],
-          }
+          path.join(__dirname, "../lambdas/python/process_batch_email_event/")
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -173,17 +183,15 @@ export class CdkStack extends cdk.Stack {
       })
     );
 
-    const scheduleBatchEmail: lambda.Function = new lambda.Function(
+    const scheduleBatchEmail = new lambda.Function(
       stack,
       "ScheduleBatchEmail",
       {
+        functionName: `${applicationName}_schedule-batch-email`,
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "schedule_batch_lambda.main.lambda_handler",
+        handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/schedule_batch_email/"),
-          {
-            exclude: ["**/__pycache__"],
-          }
+          path.join(__dirname, "../lambdas/python/schedule_batch_email/")
         ),
         environment: {
           LOG_LEVEL: "INFO",
@@ -202,26 +210,22 @@ export class CdkStack extends cdk.Stack {
       })
     );
 
-    const processSesTemplate: lambda.Function = new lambda.Function(
+    const processSesTemplate = new lambda.Function(
       stack,
       "ProcessSesTemplate",
       {
+        functionName: `${applicationName}_process-ses-template-event`,
         runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "process_ses_template.main.lambda_handler",
+        handler: "main.lambda_handler",
         code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_ses_template/"),
-          {
-            exclude: ["**/__pycache__"],
-          }
+          path.join(__dirname, "../lambdas/python/process_ses_template/")
         ),
         environment: {
           LOG_LEVEL: "INFO",
           SES_NO_REPLY_SENDER: "no-reply@johnjhc.com",
           SES_ADMIN_EMAIL: "jchoi950@yahoo.com",
-          BATCH_EMAIL_SERVICE_BUCKET_NAME:
-            process.env.BATCH_EMAIL_SERVICE_BUCKET_NAME!,
-          TEMPLATE_METADATA_TABLE_NAME:
-            process.env.TEMPLATE_METADATA_TABLE_NAME!,
+          BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
+          TEMPLATE_METADATA_TABLE_NAME: TemplateMetadataDDBTable.tableName,
           PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY:
             process.env.PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY!,
           PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY:
