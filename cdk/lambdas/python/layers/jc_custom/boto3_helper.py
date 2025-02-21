@@ -55,7 +55,8 @@ class AWSClients:
     def preload_aws_clients(
         self, services: List[str], region: Optional[str] = aws_default_region
     ):
-        logger.warning(f"Pre-loading {services} clients...")
+        logger.info(f"Pre-loading {services} clients...")
+
         for service in services:
             self.get_client(service, region)
 
@@ -68,7 +69,8 @@ class AWSClients:
         region = region or aws_default_region
 
         client = boto3.client(service, region_name=region)
-        logger.warning(
+
+        logger.info(
             f"Initializing {service.upper()} client for {region}... {id(client)}"
         )
 
