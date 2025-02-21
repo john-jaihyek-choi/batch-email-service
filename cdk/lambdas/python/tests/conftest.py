@@ -82,7 +82,7 @@ def mocked_s3(mocked_aws) -> Generator[S3Client, None, None]:
             },
             {
                 "local_path": os.getenv("TEST_EXAMPLE_TEMPLATE_PATH", ""),
-                "s3_prefix": "templates/",
+                "s3_prefix": "templates/system/",
             },
         ]
 
