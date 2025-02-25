@@ -37,6 +37,10 @@ def lambda_handler(
                 message="No valid message targets found",
             )
 
+        logger.debug(
+            f"start processing target_messages: {json.dumps(target_messages, indent=2)}"
+        )
+
         response = process_sqs_message_targets(target_messages)
 
         return response
