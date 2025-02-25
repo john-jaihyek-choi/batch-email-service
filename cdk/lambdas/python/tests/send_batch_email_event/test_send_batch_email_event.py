@@ -101,7 +101,7 @@ def test_invalid_s3_event_name(invalid_event_name: Dict[str, Any]) -> None:
     response = lambda_handler(invalid_event_name, {})
 
     assert response["StatusCode"] == HTTPStatus.NO_CONTENT
-    assert response["Message"] == "No valid targets found"
+    assert response["Message"] == "No valid s3 targets found"
 
 
 def test_sent_message_validation(
