@@ -222,7 +222,7 @@ def send_ses_email(
     send_to: str,
     subject: str,
     body: str,
-    attachments: OrderedDict[str, str],
+    attachments: Optional[OrderedDict[str, str]] = [],
     body_type: Literal["html", "plain"] = "plain",
     aws_region: Optional[str] = aws_default_region,
 ) -> None:
