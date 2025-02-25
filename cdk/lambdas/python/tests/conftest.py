@@ -82,7 +82,7 @@ def mocked_s3(mocked_aws) -> Generator[S3Client, None, None]:
             },
             {
                 "local_path": os.getenv("TEST_EXAMPLE_TEMPLATE_PATH", ""),
-                "s3_prefix": "templates/system/",
+                "s3_prefix": "templates/",
             },
         ]
 
@@ -104,8 +104,13 @@ def mocked_s3(mocked_aws) -> Generator[S3Client, None, None]:
 def mocked_ses(mocked_aws) -> Generator[SESV2Client, None, None]:
     try:
         sesv2: SESV2Client = aws_client.get_client("sesv2", aws_region)
-        ses: SESClient = aws_client.get_client("ses", aws_region)
-        ses.verify_email_identity(EmailAddress=os.getenv("SES_NO_REPLY_SENDER", ""))
+        sesv1: SESClient = aws_client.get_client("ses", aws_region)
+
+        allow_domains = ["email.com", "gmail.com", "yahoo.com"]
+
+        for domain in allow_domains:
+            sesv1.verify_domain_identity(Domain=domain)
+
     except Exception as e:
         pytest.fail(f"Failed to setup ses client and/or verify email identity: {e}")
     yield sesv2
