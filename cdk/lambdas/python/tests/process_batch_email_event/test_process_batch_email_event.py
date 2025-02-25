@@ -90,7 +90,7 @@ def transform_sqs_message_to_lambda_event(messages: List[MessageTypeDef]) -> SQS
         transformed_event["Records"].append(
             {
                 "messageId": message.get("MessageId"),
-                "receiptHandle": message.get("receiptHandle"),
+                "receiptHandle": message.get("ReceiptHandle"),
                 "body": message.get("Body"),
                 "attributes": message.get("Attributes"),
                 "messageAttributes": message.get("MessageAttributes"),
