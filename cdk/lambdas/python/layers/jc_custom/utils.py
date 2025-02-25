@@ -7,7 +7,8 @@ import re
 import urllib.parse
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, KeysView, TypedDict, Tuple
-from aws_lambda_powertools.utilities.data_classes import S3Event
+from aws_lambda_powertools.utilities.data_classes import S3Event, SQSEvent
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
@@ -20,6 +21,13 @@ class S3Target(TypedDict):
     PrincipalId: str
     Timestamp: str  # ISO format: "YYYYMMDD_HHMMSS"
     EventName: str
+
+
+class SQSMessageTarget(TypedDict):
+    BatchId: str
+    Recipients: List[Dict[str, Any]]
+    UploadedBy: str
+    Timestamp: str
 
 
 def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) -> str:
@@ -100,6 +108,31 @@ def filter_s3_targets(
                 )
         except Exception as e:
             logger.exception(f"Error filtering s3 target. Skipping record - {record}")
+
+    return res
+
+
+def filter_sqs_event(sqs_event: SQSEvent) -> List[SQSMessageTarget]:
+    logger.info("formatting and filtering s3 tagets...")
+
+    res: List[SQSMessageTarget] = []
+
+    for record in sqs_event["Records"]:
+        try:
+            body = json.loads(record["body"])
+
+            res.append(
+                {
+                    "MessageId": record["messageId"],
+                    "ReceiptHandle": record["receiptHandle"],
+                    "BatchId": body["BatchId"],
+                    "Recipients": body["Recipients"],
+                    "UploadedBy": body["Metadata"]["UploadedBy"],
+                    "Timestamp": body["Metadata"]["Timestamp"],
+                }
+            )
+        except Exception as e:
+            logger.exception(f"Error filtering sqs event. Skipping record - {record}")
 
     return res
 
