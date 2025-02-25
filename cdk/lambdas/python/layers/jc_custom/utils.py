@@ -25,7 +25,7 @@ class S3Target(TypedDict):
 
 class SQSMessageTarget(TypedDict):
     BatchId: str
-    Recipients: List[Dict[str, Any]]
+    Recipients: List[Dict[str, str]]
     UploadedBy: str
     Timestamp: str
 
