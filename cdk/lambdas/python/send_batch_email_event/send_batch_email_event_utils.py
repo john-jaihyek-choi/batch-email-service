@@ -3,6 +3,7 @@ import logging
 import csv
 import io
 import re
+import time
 from functools import lru_cache
 from collections import OrderedDict
 from typing import Dict, List, Any, Literal, Optional, cast, IO
@@ -14,7 +15,12 @@ from botocore.exceptions import ClientError
 from send_batch_email_event_config import (
     config,
 )
-from jc_custom.boto3_helper import get_s3_object, send_sqs_message, get_ddb_item
+from jc_custom.boto3_helper import (
+    get_s3_object,
+    send_sqs_message,
+    get_ddb_item,
+    put_ddb_item,
+)
 from jc_custom.utils import S3Target
 
 logger = logging.getLogger(__name__)
@@ -156,7 +162,10 @@ def generate_target_errors_payload(
 
 
 def generate_batch_payload(
-    target_path: str, success_count: int, errors: List[Dict[str, Any]], error_count: int
+    target_path: str,
+    success_count: int,
+    errors: List[Dict[str, Any]],
+    error_count: int,
 ) -> Dict[str, Any]:
     return {
         "Target": target_path,
@@ -186,8 +195,8 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
             s3_target["PrincipalId"],
             s3_target["Timestamp"],
         )
-
         target_path = f"{bucket_name}/{prefix}{object}"
+        batch_name = f"{target_path}-{timestamp}"
 
         logger.info(f"getting {target_path}...")
         csv_content = get_s3_object(
@@ -199,11 +208,10 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
 
         logger.info(f"grouping recipients by {recipients_per_message}...")
 
-        batch_number = 1
-
+        batch_number, batch_sent = 1, 0
         # group the recipients and send message to sqs
         for batch, failed_rows in batch_read_csv(wrapper, recipients_per_message):
-            batch_id = f"{target_path}-{timestamp}-{batch_number}"
+            batch_id = f"{batch_name}-{batch_number}"
             batch_number += 1
             success_count += len(batch)
 
@@ -226,6 +234,8 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
                         queue_name=config.EMAIL_BATCH_QUEUE_NAME,
                         message_body=message,
                     )
+
+                    batch_sent += 1
             except Exception as e:
                 logger.exception(
                     f"Failed to send sqs batch {batch_number} for {target_path}: {e}"
@@ -239,10 +249,26 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
         else:  # add to collection of failed rows when done
             logger.debug("adding failed rows to batch_errors!")
             batch_errors.extend(failed_rows)
+
+        if batch_sent:
+            ttl_stamp = int(time.time()) + 3600
+
+            # initialize batch to email batch tracker table with total batch sent attribute for consumer lambda
+            put_ddb_item(
+                table_name=config.EMAIL_BATCH_TRACKER_TABLE_NAME,
+                item={
+                    "batch_name": {"S": batch_name},
+                    "total_batch": {"N": str(batch_sent)},
+                    "batch_processed": {"N": "0"},
+                    "expirationTime": {"N": str(ttl_stamp)},
+                },
+            )
+
     except Exception as e:
         logger.exception(f"Error at processing target: {e}")
         batch_errors.append({"Error": "Unexpected error", "Details": str(e)})
     finally:
+
         return generate_batch_payload(
             target_path,
             success_count,

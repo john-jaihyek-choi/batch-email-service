@@ -21,7 +21,11 @@ from jc_custom.utils import (
     generate_csv,
     S3Target,
 )
-from jc_custom.boto3_helper import send_ses_email, move_s3_objects, get_s3_object
+from jc_custom.boto3_helper import (
+    send_ses_email,
+    move_s3_objects,
+    get_s3_object,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
