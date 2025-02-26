@@ -41,16 +41,30 @@ export class CdkStack extends cdk.Stack {
     const accountId = stack.account;
 
     // DDB Table:
-    const TemplateMetadataDDBTable = new ddb.TableV2(
+    const TemplateMetadataTable = new ddb.TableV2(
       stack,
-      "TemplateMetadataDDBTable",
+      "TemplateMetadataTable",
       {
-        tableName: "batch-email-service_template-metadata",
+        tableName: `${applicationName}_template-metadata`,
         partitionKey: {
           name: "template_key",
           type: ddb.AttributeType.STRING,
         },
-        removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    const EmailBatchTrackerTable = new ddb.TableV2(
+      stack,
+      "EmailBatchTrackerTable",
+      {
+        tableName: `${applicationName}_email-batch-tracker`,
+        partitionKey: {
+          name: "batch_name",
+          type: ddb.AttributeType.STRING,
+        },
+        timeToLiveAttribute: "expirationTime",
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
@@ -104,28 +118,115 @@ export class CdkStack extends cdk.Stack {
         assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
       }
     );
-
-    //// AWS managed basic lambda execution role
-    sendBatchEmailEventRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName(
-        "service-role/AWSLambdaBasicExecutionRole"
-      )
-    );
-
-    //// S3 policy
-    sendBatchEmailEventRole.addToPolicy(
-      new iam.PolicyStatement({
+    const sendBatchEmailEventRolePolicies = [
+      {
+        // S3 policy
         actions: ["s3:GetObject", "s3:DeleteObject", "s3:PutObject"],
         resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
-      })
-    );
-
-    //// SES policy
-    sendBatchEmailEventRole.addToPolicy(
-      new iam.PolicyStatement({
+      },
+      {
+        // SES policy
         actions: ["ses:SendRawEmail"],
         resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
-      })
+      },
+      {
+        // DDB policy
+        actions: ["dynamodb:GetItem"],
+        resources: [TemplateMetadataTable.tableArn],
+      },
+      {
+        // DDB policy
+        actions: ["dynamodb:PutItem"],
+        resources: [EmailBatchTrackerTable.tableArn],
+      },
+    ];
+    addPolicyToLambdaRole(
+      sendBatchEmailEventRolePolicies,
+      sendBatchEmailEventRole
+    );
+
+    //// ProcessSESTemplate Lambda Execution Roles:
+    const processSesTemplateRole = new iam.Role(
+      stack,
+      "ProcessSesTemplateRole",
+      {
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      }
+    );
+    const processSesTemplateRolePolicies = [
+      {
+        // S3 Policy
+        actions: ["s3:GetObject", "s3:PutObject"],
+        resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
+      },
+      {
+        // SES Policy
+        actions: ["ses:SendRawEmail"],
+        resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
+      },
+      {
+        // DynamoDB Policy
+        actions: ["dynamodb:PutItem", "dynamodb:GetItem"],
+        resources: [TemplateMetadataTable.tableArn],
+      },
+    ];
+    addPolicyToLambdaRole(
+      processSesTemplateRolePolicies,
+      processSesTemplateRole
+    );
+
+    //// ProcessBatchEmailEvent Lambda Execution Roles:
+    const processBatchEmailEventRole = new iam.Role(
+      stack,
+      "ProcessBatchEmailEventRole",
+      {
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      }
+    );
+    const processBatchEmailEventRolePolicies = [
+      {
+        // S3 Policy
+        actions: ["s3:GetObject"],
+        resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
+      },
+      {
+        // SES Policy
+        actions: ["ses:SendRawEmail"],
+        resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
+      },
+      {
+        // DynamoDB Policy
+        actions: ["dynamodb:PutItem", "dynamodb:GetItem"],
+        resources: [EmailBatchTrackerTable.tableArn],
+      },
+    ];
+    addPolicyToLambdaRole(
+      processBatchEmailEventRolePolicies,
+      processBatchEmailEventRole
+    );
+
+    //// scheduleBatchEmail Lambda Execution Roles:
+    const scheduleBatchEmailRole = new iam.Role(
+      stack,
+      "ScheduleBatchEmailRole",
+      {
+        assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      }
+    );
+    const scheduleBatchEmailRolePolicies = [
+      {
+        actions: [
+          "scheduler:CreateSchedule",
+          "scheduler:PutTargets",
+          "scheduler:DeleteSchedule",
+          "scheduler:TagResource",
+        ],
+        resources: [`arn:aws:scheduler:${awsRegion}:${accountId}:schedule/*`],
+      },
+    ];
+    addPolicyToLambdaRole(
+      scheduleBatchEmailRolePolicies,
+      scheduleBatchEmailRole
     );
 
     // Lambdas:
@@ -155,9 +256,37 @@ export class CdkStack extends cdk.Stack {
           RECIPIENTS_PER_MESSAGE: "50",
           LOG_LEVEL: "INFO",
           EMAIL_REQUIRED_FIELDS: process.env.EMAIL_REQUIRED_FIELDS!,
-          TEMPLATE_METADATA_TABLE_NAME: TemplateMetadataDDBTable.tableName,
+          TEMPLATE_METADATA_TABLE_NAME: TemplateMetadataTable.tableName,
         },
         role: sendBatchEmailEventRole,
+      }
+    );
+
+    const processSesTemplate = new lambda.Function(
+      stack,
+      "ProcessSesTemplate",
+      {
+        functionName: `${applicationName}_process-ses-template-event`,
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: "main.lambda_handler",
+        code: lambda.Code.fromAsset(
+          path.join(__dirname, "../lambdas/python/process_ses_template"),
+          {
+            exclude: ["**/__pycache__/*", "__pycache__"],
+          }
+        ),
+        environment: {
+          LOG_LEVEL: "INFO",
+          SES_NO_REPLY_SENDER: "no-reply@johnjhc.com",
+          SES_ADMIN_EMAIL: "jchoi950@yahoo.com",
+          BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
+          TEMPLATE_METADATA_TABLE_NAME: TemplateMetadataTable.tableName,
+          PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY:
+            process.env.PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY!,
+          PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY:
+            process.env.PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY!,
+        },
+        role: processSesTemplateRole,
       }
     );
 
@@ -177,6 +306,7 @@ export class CdkStack extends cdk.Stack {
         environment: {
           LOG_LEVEL: "INFO",
         },
+        role: processBatchEmailEventRole,
       }
     );
     processBatchEmailEvent.addEventSource(
@@ -201,44 +331,7 @@ export class CdkStack extends cdk.Stack {
         environment: {
           LOG_LEVEL: "INFO",
         },
-      }
-    );
-    scheduleBatchEmail.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: [
-          "scheduler:CreateSchedule",
-          "scheduler:PutTargets",
-          "scheduler:DeleteSchedule",
-          "scheduler:TagResource",
-        ],
-        resources: [`arn:aws:scheduler:${awsRegion}:${accountId}:schedule/*`],
-      })
-    );
-
-    const processSesTemplate = new lambda.Function(
-      stack,
-      "ProcessSesTemplate",
-      {
-        functionName: `${applicationName}_process-ses-template-event`,
-        runtime: lambda.Runtime.PYTHON_3_12,
-        handler: "main.lambda_handler",
-        code: lambda.Code.fromAsset(
-          path.join(__dirname, "../lambdas/python/process_ses_template"),
-          {
-            exclude: ["**/__pycache__/*", "__pycache__"],
-          }
-        ),
-        environment: {
-          LOG_LEVEL: "INFO",
-          SES_NO_REPLY_SENDER: "no-reply@johnjhc.com",
-          SES_ADMIN_EMAIL: "jchoi950@yahoo.com",
-          BATCH_EMAIL_SERVICE_BUCKET_NAME: jcBatchEmailServiceBucket.bucketName,
-          TEMPLATE_METADATA_TABLE_NAME: TemplateMetadataDDBTable.tableName,
-          PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY:
-            process.env.PROCESS_SES_TEMPLATE_FAILURE_HTML_TEMPLATE_KEY!,
-          PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY:
-            process.env.PROCESS_SES_TEMPLATE_FAILURE_TEXT_TEMPLATE_KEY!,
-        },
+        role: scheduleBatchEmailRole,
       }
     );
 
@@ -290,5 +383,21 @@ export class CdkStack extends cdk.Stack {
         config.filters
       );
     });
+  }
+}
+
+function addPolicyToLambdaRole(
+  policies: Array<cdk.aws_iam.PolicyStatementProps>,
+  role: cdk.aws_iam.Role
+) {
+  //// AWS managed basic lambda execution role
+  role.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName(
+      "service-role/AWSLambdaBasicExecutionRole"
+    )
+  );
+
+  for (const policy of policies) {
+    role.addToPolicy(new iam.PolicyStatement(policy));
   }
 }
