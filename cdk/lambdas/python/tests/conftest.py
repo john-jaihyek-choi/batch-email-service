@@ -106,7 +106,7 @@ def mocked_ses(mocked_aws) -> Generator[SESV2Client, None, None]:
         sesv2: SESV2Client = aws_client.get_client("sesv2", aws_region)
         sesv1: SESClient = aws_client.get_client("ses", aws_region)
 
-        allow_domains = ["email.com", "gmail.com", "yahoo.com"]
+        allow_domains = ["email.com", "gmail.com", "yahoo.com", "johnjhc.com"]
 
         for domain in allow_domains:
             sesv1.verify_domain_identity(Domain=domain)
@@ -120,11 +120,12 @@ def mocked_ses(mocked_aws) -> Generator[SESV2Client, None, None]:
 def mocked_ddb(mocked_aws) -> Generator[DynamoDBClient, None, None]:
     db_path: str = os.getenv("TEST_EXAMPLE_DB_PATH", "")
     try:
-        table_name = os.getenv("TEMPLATE_METADATA_TABLE_NAME", "")
+        template_metadata_table = os.getenv("TEMPLATE_METADATA_TABLE_NAME", "")
+        email_batch_progress_table = os.getenv("EMAIL_BATCH_TRACKER_TABLE_NAME", "")
         ddb: DynamoDBClient = aws_client.get_client("dynamodb", aws_region)
 
         ddb.create_table(
-            TableName=table_name,
+            TableName=template_metadata_table,
             AttributeDefinitions=[
                 {"AttributeName": "template_key", "AttributeType": "S"},
             ],
@@ -132,7 +133,18 @@ def mocked_ddb(mocked_aws) -> Generator[DynamoDBClient, None, None]:
             BillingMode="PAY_PER_REQUEST",
         )
 
-        ddb.get_waiter("table_exists").wait(TableName=table_name)
+        ddb.get_waiter("table_exists").wait(TableName=template_metadata_table)
+
+        ddb.create_table(
+            TableName=email_batch_progress_table,
+            AttributeDefinitions=[
+                {"AttributeName": "batch_name", "AttributeType": "S"},
+            ],
+            KeySchema=[{"AttributeName": "batch_name", "KeyType": "HASH"}],
+            BillingMode="PAY_PER_REQUEST",
+        )
+
+        ddb.get_waiter("table_exists").wait(TableName=email_batch_progress_table)
 
         batch_write_item: List[WriteRequestUnionTypeDef] = []
 
@@ -143,7 +155,7 @@ def mocked_ddb(mocked_aws) -> Generator[DynamoDBClient, None, None]:
                 batch_write_item.append({"PutRequest": {"Item": row}})
 
         ddb.batch_write_item(
-            RequestItems={table_name: batch_write_item},
+            RequestItems={template_metadata_table: batch_write_item},
             ReturnConsumedCapacity="TOTAL",
         )
 
