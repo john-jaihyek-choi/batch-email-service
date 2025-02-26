@@ -31,6 +31,9 @@ class Config:
     )
     EMAIL_REQUIRED_FIELDS: List[str] = os.getenv("EMAIL_REQUIRED_FIELDS", "").split(",")
     TEMPLATE_METADATA_TABLE_NAME: str = os.getenv("TEMPLATE_METADATA_TABLE_NAME", "")
+    EMAIL_BATCH_TRACKER_TABLE_NAME: str = os.getenv(
+        "EMAIL_BATCH_TRACKER_TABLE_NAME", ""
+    )
 
 
 config = Config()
