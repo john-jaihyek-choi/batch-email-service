@@ -25,6 +25,44 @@ logger.setLevel(config.LOG_LEVEL)
 deserializer = TypeDeserializer()
 
 
+def update_ddb_batch_details_field(
+    batch_name: str,
+    failed: List[Dict[str, str]],
+    successful: List[Dict[str, str]],
+) -> Any:
+    table_name = config.EMAIL_BATCH_TRACKER_TABLE_NAME
+
+    logger.debug(f"updating batch_details field in {table_name}")
+
+    res = update_ddb_item(
+        table_name=table_name,
+        key={"batch_name": {"S": batch_name}},
+        update_expression="""
+            SET batch_details.failed = list_append(batch_details.failed, :failed)
+            SET batch_details.success = list_append(batch_details.success, :successful)
+            SET batch_processed = batch_processed + :plusone
+        """,
+        expression_attribute_values={
+            ":failed": {
+                "L": [
+                    {"M": {key: {"S": str(val)} for key, val in recipient.items()}}
+                    for recipient in failed
+                ]
+            },
+            ":successful": {
+                "L": [
+                    {"M": {key: {"S": str(val)} for key, val in recipient.items()}}
+                    for recipient in successful
+                ]
+            },
+            ":plusone": {"N": "1"},
+        },
+        return_values="ALL_NEW",
+    )
+
+    return res
+
+
 def process_recipients(target: SQSMessageTarget):
     failed_recipients, successful_recipients = [], []
 
