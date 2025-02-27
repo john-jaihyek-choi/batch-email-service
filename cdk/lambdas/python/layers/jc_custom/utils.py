@@ -125,6 +125,7 @@ def filter_sqs_event(sqs_event: SQSEvent) -> List[SQSMessageTarget]:
                 {
                     "MessageId": record["messageId"],
                     "ReceiptHandle": record["receiptHandle"],
+                    "BatchName": body["BatchName"],
                     "BatchId": body["BatchId"],
                     "Recipients": body["Recipients"],
                     "UploadedBy": body["Metadata"]["UploadedBy"],
