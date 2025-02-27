@@ -196,7 +196,7 @@ export class CdkStack extends cdk.Stack {
       },
       {
         // DynamoDB Policy
-        actions: ["dynamodb:PutItem", "dynamodb:GetItem"],
+        actions: ["dynamodb:UpdateItem"],
         resources: [EmailBatchTrackerTable.tableArn],
       },
     ];
