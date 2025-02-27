@@ -17,6 +17,9 @@ class Config:
     BATCH_EMAIL_SERVICE_BUCKET_NAME: str = os.getenv(
         "BATCH_EMAIL_SERVICE_BUCKET_NAME", ""
     )
+    EMAIL_BATCH_TRACKER_TABLE_NAME: str = os.getenv(
+        "EMAIL_BATCH_TRACKER_TABLE_NAME", ""
+    )
 
 
 config = Config()
