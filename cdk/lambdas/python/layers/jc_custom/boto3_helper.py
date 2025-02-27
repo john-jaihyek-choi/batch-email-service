@@ -23,8 +23,12 @@ from mypy_boto3_s3.type_defs import (
 from mypy_boto3_sqs.type_defs import SendMessageResultTypeDef
 from mypy_boto3_dynamodb.type_defs import (
     GetItemOutputTypeDef,
+    DeleteItemOutputTypeDef,
+    PutItemOutputTypeDef,
+    UpdateItemOutputTypeDef,
     UniversalAttributeValueTypeDef,
 )
+from mypy_boto3_dynamodb.literals import ReturnValueType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
@@ -104,7 +108,7 @@ def delete_ddb_item(
     table_name: str,
     key: Mapping[str, UniversalAttributeValueTypeDef],
     aws_region: Optional[str] = aws_default_region,
-):
+) -> DeleteItemOutputTypeDef:
     try:
         ddb: DynamoDBClient = aws_client.get_client("dynamodb", region=aws_region)
 
@@ -121,11 +125,41 @@ def put_ddb_item(
     table_name: str,
     item: Mapping[str, UniversalAttributeValueTypeDef],
     aws_region: Optional[str] = aws_default_region,
-):
+) -> PutItemOutputTypeDef:
     try:
         ddb: DynamoDBClient = aws_client.get_client("dynamodb", region=aws_region)
 
         return ddb.put_item(TableName=table_name, Item=item)
+    except ClientError as e:
+        logger.exception(f"Unexpected Boto3 client error: {e}")
+        raise
+    except boto3.exceptions.Boto3Error as e:
+        logger.exception(f"Boto3 library error: {e}")
+        raise
+
+
+def update_ddb_item(
+    table_name: str,
+    key: Mapping[str, UniversalAttributeValueTypeDef],
+    update_expression: Optional[str] = "",
+    expression_attribute_names: Optional[Mapping[str, str]] = {},
+    expression_attribute_values: Optional[
+        Mapping[str, UniversalAttributeValueTypeDef]
+    ] = {},
+    return_values: Optional[ReturnValueType] = "NONE",
+    aws_region: Optional[str] = aws_default_region,
+) -> UpdateItemOutputTypeDef:
+    try:
+        ddb: DynamoDBClient = aws_client.get_client("dynamodb", region=aws_region)
+
+        return ddb.update_item(
+            TableName=table_name,
+            Key=key,
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values,
+            ReturnValues=return_values,
+        )
     except ClientError as e:
         logger.exception(f"Unexpected Boto3 client error: {e}")
         raise
