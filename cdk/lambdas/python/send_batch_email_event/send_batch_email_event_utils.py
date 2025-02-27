@@ -218,6 +218,7 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
             try:
                 if batch:
                     message = {
+                        "BatchName": batch_name,
                         "BatchId": batch_id,
                         "Recipients": batch,
                         "Metadata": {
@@ -251,7 +252,7 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
             batch_errors.extend(failed_rows)
 
         if batch_sent:
-            ttl_stamp = int(time.time()) + 3600
+            ttl_stamp = int(time.time()) + 86400
 
             # initialize batch to email batch tracker table with total batch sent attribute for consumer lambda
             put_ddb_item(
@@ -260,6 +261,7 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
                     "batch_name": {"S": batch_name},
                     "total_batch": {"N": str(batch_sent)},
                     "batch_processed": {"N": "0"},
+                    "batch_details": {"M": {"failed": {"L": []}, "success": {"L": []}}},
                     "expirationTime": {"N": str(ttl_stamp)},
                 },
             )
