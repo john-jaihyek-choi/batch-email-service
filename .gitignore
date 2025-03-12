@@ -10,6 +10,7 @@ node_modules
 __pycache__
 *.egg-info
 .mypy_cache
+.coverage*
 
 # CDK asset staging directory
 .cdk.staging
