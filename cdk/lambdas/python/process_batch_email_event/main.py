@@ -12,6 +12,7 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 from jc_custom.utils import (
     generate_handler_response,
     filter_sqs_event,
+    GenerateHandlerResponseReturnType,
 )
 from process_batch_email_event_config import config
 from process_batch_email_event_processor import process_sqs_message_targets
@@ -22,7 +23,7 @@ logger.setLevel(config.LOG_LEVEL)
 
 def lambda_handler(
     event: SQSEvent, context: Optional[LambdaContext] = None
-) -> Dict[str, Any]:
+) -> GenerateHandlerResponseReturnType:
     logger.info("event: %s", json.dumps(event, indent=2))
 
     try:
@@ -33,7 +34,7 @@ def lambda_handler(
 
         if not target_messages:
             return generate_handler_response(
-                status_code=HTTPStatus.NO_CONTENT.value,
+                status_code=HTTPStatus.NO_CONTENT,
                 message="No valid message targets found",
             )
 
@@ -41,17 +42,15 @@ def lambda_handler(
             f"start processing target_messages: {json.dumps(target_messages, indent=2)}"
         )
 
-        response = process_sqs_message_targets(target_messages)
-
-        return response
+        return process_sqs_message_targets(target_messages)
 
     except ValueError as e:
         logger.exception(f"Value Error: {e}")
-        return generate_handler_response(HTTPStatus.BAD_REQUEST.value, str(e))
+        return generate_handler_response(HTTPStatus.BAD_REQUEST, str(e))
 
     except Exception as e:
         logger.exception(f"Critical error in lambda_handler: {str(e)}")
         return generate_handler_response(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             message="An error occurred while processing the batch",
         )

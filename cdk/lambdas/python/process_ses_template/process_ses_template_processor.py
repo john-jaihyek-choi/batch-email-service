@@ -15,7 +15,12 @@ from jc_custom.boto3_helper import (
 from process_ses_template_config import (
     config,
 )
-from jc_custom.utils import S3Target, autofill_email_template, generate_handler_response
+from jc_custom.utils import (
+    S3Target,
+    GenerateHandlerResponseReturnType,
+    autofill_email_template,
+    generate_handler_response,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
@@ -30,7 +35,7 @@ class ProcessedTarget(TypedDict):
 TemplateMetadataFields = List[Dict[Literal["S"], str]]
 
 
-def process_s3_targets(s3_targets: List[S3Target]) -> Dict[str, Any]:
+def process_s3_targets(s3_targets: List[S3Target]) -> GenerateHandlerResponseReturnType:
     table_name = config.TEMPLATE_METADATA_TABLE_NAME
     target_processed: List[Dict[str, Any]] = []
 
@@ -98,18 +103,18 @@ def process_s3_targets(s3_targets: List[S3Target]) -> Dict[str, Any]:
     if successfully_processed == 0:  # no successfully processed target
         logger.info("Template process failed")
         return generate_handler_response(
-            HTTPStatus.INTERNAL_SERVER_ERROR.value, "Template update failed"
+            HTTPStatus.INTERNAL_SERVER_ERROR, "Template update failed"
         )
     elif successfully_processed != len(target_processed):  # partially successful
         logger.info("Template update partially completed")
         return generate_handler_response(
-            HTTPStatus.OK.value, "Template update partially successful"
+            HTTPStatus.OK, "Template update partially successful"
         )
     else:
         logger.info(f"Upload status email sent successfully via SES!")
 
         return generate_handler_response(
-            HTTPStatus.OK.value, "Template update completed successfully"
+            HTTPStatus.OK, "Template update completed successfully"
         )
 
 
@@ -127,6 +132,7 @@ def send_ses_template_status_report(processed_targets: List[Dict[str, Any]]) -> 
     html_fields_mapping = generate_template_mapping(processed_targets, "html")
     txt_fields_mapping = generate_template_mapping(processed_targets, "txt")
 
+    # Note for future-self: purposefully not catching error since I'm not dealing with recipients here. Let lambda error out for admin to monitor
     ses_html_body = autofill_email_template(
         get_s3_object(batch_email_service_bucket_name, admin_email_html_template_key),
         html_fields_mapping,
@@ -170,7 +176,7 @@ def extract_required_fields_from_s3(
 
 def generate_template_mapping(
     target_processed: List[ProcessedTarget], for_type: Literal["html", "txt"]
-):
+) -> Dict[str, str]:
     success_count, total_count = 0, len(target_processed)
     template_process_details: List[str] = []
 

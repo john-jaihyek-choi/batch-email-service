@@ -5,6 +5,7 @@ import io
 import os
 import re
 import urllib.parse
+from http import HTTPStatus
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, KeysView, TypedDict, Tuple
 from aws_lambda_powertools.utilities.data_classes import S3Event, SQSEvent
@@ -23,11 +24,24 @@ class S3Target(TypedDict):
     EventName: str
 
 
+Recipient = Dict[str, str]
+
+
 class SQSMessageTarget(TypedDict):
+    MessageId: str
+    ReceiptHandle: str
+    BatchName: str
     BatchId: str
-    Recipients: List[Dict[str, str]]
+    Recipients: List[Recipient]
     UploadedBy: str
     Timestamp: str
+
+
+class GenerateHandlerResponseReturnType(TypedDict):
+    StatusCode: int
+    Message: str
+    Header: Dict[str, str]
+    Body: str
 
 
 def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) -> str:
@@ -50,7 +64,7 @@ def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) 
         return template
     except Exception as e:
         logger.exception(f"Error generating template: {e}")
-        return "Unexpected error while autofilling email template"
+        raise
 
 
 def filter_s3_targets(
@@ -162,16 +176,17 @@ def generate_csv(
 
     except Exception as e:
         logger.error(f"Error generating csv: {e}")
+        csv_content = "Error generating csv - please seek admin for help"
     finally:
-        return csv_content or ""
+        return csv_content
 
 
 def generate_handler_response(
-    status_code: int, message: Optional[str] = "", body: Optional[Any] = ""
-):
+    status_code: HTTPStatus, message: Optional[str] = "", body: Optional[Any] = ""
+) -> GenerateHandlerResponseReturnType:
     try:
         response = {
-            "StatusCode": status_code,
+            "StatusCode": status_code.value,
             "Message": message,
             "Header": {"Content-Type": "application/json"},
             "Body": json.dumps(body),
@@ -179,3 +194,4 @@ def generate_handler_response(
         return response
     except TypeError as e:
         logger.exception(f"Type error at generate_handler_response: {e}")
+        raise

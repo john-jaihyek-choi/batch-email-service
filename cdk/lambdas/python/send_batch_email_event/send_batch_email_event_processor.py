@@ -20,6 +20,7 @@ from jc_custom.utils import (
     generate_handler_response,
     generate_csv,
     S3Target,
+    GenerateHandlerResponseReturnType,
 )
 from jc_custom.boto3_helper import (
     send_ses_email,
@@ -31,7 +32,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
 
 
-def process_s3_targets(target_objects: List[S3Target]) -> Dict[str, Any]:
+def process_s3_targets(
+    target_objects: List[S3Target],
+) -> GenerateHandlerResponseReturnType:
     target_errors: List[Dict[str, Any]] = []
     successful_recipients_count = 0
 
@@ -66,13 +69,13 @@ def process_s3_targets(target_objects: List[S3Target]) -> Dict[str, Any]:
     logger.info("successfully processed the batches")
 
     return generate_handler_response(
-        HTTPStatus.OK.value, "Batch processing completed successfully"
+        HTTPStatus.OK, "Batch processing completed successfully"
     )
 
 
 def handle_target_errors(
     target_errors: List[Dict[str, Any]], successful_recipients_count: int
-) -> Dict[str, Any]:
+) -> GenerateHandlerResponseReturnType:
     attachments: OrderedDict[str, str] = OrderedDict()
     fields: Dict[str, str] = target_errors[0].get("Errors", [])[0]
     headers = fields.keys()
@@ -93,6 +96,7 @@ def handle_target_errors(
         target_errors, "txt"
     )
 
+    # Note for future-self: purposefully not catching error since I'm not dealing with recipients here. Let lambda error out for admin to monitor
     html_body = autofill_email_template(
         get_s3_object(template_bucket, html_template_key),
         html_template_replacements,
@@ -120,7 +124,7 @@ def handle_target_errors(
     ):  # handle partial success case (x out of total recipients successful scenario)
         logger.info("partially processed the batches")
         return generate_handler_response(
-            status_code=HTTPStatus.OK.value,
+            status_code=HTTPStatus.OK,
             message="Batch partially processed",
             body={"FailedBatches": target_errors},
         )
@@ -133,7 +137,7 @@ def handle_target_errors(
     logger.info("Failed processing the batches")
 
     return generate_handler_response(
-        status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         message="Failed processing the batches",
         body={"FailedBatches": target_errors},
     )

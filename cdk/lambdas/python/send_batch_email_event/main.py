@@ -11,8 +11,12 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 # custom modules
 from send_batch_email_event.send_batch_email_event_config import config
 from send_batch_email_event.send_batch_email_event_processor import process_s3_targets
-from jc_custom.utils import generate_handler_response
-from jc_custom.utils import filter_s3_targets, S3Target
+from jc_custom.utils import (
+    filter_s3_targets,
+    generate_handler_response,
+    S3Target,
+    GenerateHandlerResponseReturnType,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(config.LOG_LEVEL)
@@ -20,7 +24,7 @@ logger.setLevel(config.LOG_LEVEL)
 
 def lambda_handler(
     event: S3Event, context: Optional[LambdaContext] = None
-) -> Dict[str, Any]:
+) -> GenerateHandlerResponseReturnType:
     try:
         if not event or not event.get("Records"):
             raise ValueError("Invalid event: Missing 'Records' key")
@@ -42,24 +46,22 @@ def lambda_handler(
 
         if not target_objects:
             return generate_handler_response(
-                status_code=HTTPStatus.NO_CONTENT.value,
+                status_code=HTTPStatus.NO_CONTENT,
                 message="No valid s3 targets found",
             )
 
         logger.info("successfully retrieved all targets from event")
         logger.debug("target_objects: %s", json.dumps(target_objects, indent=2))
 
-        response = process_s3_targets(target_objects)
-
-        return response
+        return process_s3_targets(target_objects)
 
     except ValueError as e:
         logger.exception(f"Value Error: {e}")
-        return generate_handler_response(HTTPStatus.BAD_REQUEST.value, str(e))
+        return generate_handler_response(HTTPStatus.BAD_REQUEST, str(e))
 
     except Exception as e:
         logger.exception(f"Critical error in lambda_handler: {str(e)}")
         return generate_handler_response(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             message="An error occurred while processing the batch",
         )
