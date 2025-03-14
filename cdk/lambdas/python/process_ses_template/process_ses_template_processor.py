@@ -96,7 +96,12 @@ def process_s3_targets(s3_targets: List[S3Target]) -> GenerateHandlerResponseRet
             )
             continue
 
-    send_ses_template_status_report(target_processed)
+    try:
+        send_ses_template_status_report(target_processed)
+    except Exception as e:
+        logger.exception(
+            "Failed to send ses template status report. Continuing without interruption..."
+        )
 
     successfully_processed = sum(target["success"] for target in target_processed)
 
