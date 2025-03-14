@@ -110,14 +110,19 @@ def handle_target_errors(
 
     logger.info("sending ses email...")
 
-    send_ses_email(
-        send_from=config.SES_NO_REPLY_SENDER,
-        send_to=config.SES_ADMIN_EMAIL,
-        subject="Batch Email Service - Email Initiation Failed",
-        body=html_body,
-        attachments=attachments,
-        body_type="html",
-    )
+    try:
+        send_ses_email(
+            send_from=config.SES_NO_REPLY_SENDER,
+            send_to=config.SES_ADMIN_EMAIL,
+            subject="Batch Email Service - Email Initiation Failed",
+            body=html_body,
+            attachments=attachments,
+            body_type="html",
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to send email initiation status report to admin. Continuing without interruption..."
+        )
 
     if (
         successful_recipients_count
