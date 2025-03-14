@@ -63,7 +63,7 @@ export class CdkStack extends cdk.Stack {
           name: "batch_name",
           type: ddb.AttributeType.STRING,
         },
-        timeToLiveAttribute: "expirationTime",
+        timeToLiveAttribute: "expiration_time",
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
