@@ -173,16 +173,16 @@ Since the goal is to focus on the functionality, for MVP, the UI/UX will be hand
   - [x] CDK Resource provisioning
     - [x] Lambda execution role and policy settings
     - [x] Lambda function and configuration
-- [ ] Template processor Lambda (ProcessSESTemplate)
-  - [ ] Test cases
+- [x] Template processor Lambda (ProcessSESTemplate)
+  - [x] Test cases
   - [x] Logic implementation
     - [x] s3 event for CREATE/PUT and DELETE
     - [x] scan template content and collect dynamic variables
     - [x] create/update/delete template metadata to ddb
-  - [ ] CDK Resource provisioning
-    - [ ] DDB table creation
-    - [ ] Lambda execution role and policy setting
-    - [ ] Lambda function and configuration
+  - [x] CDK Resource provisioning
+    - [x] DDB table creation
+    - [x] Lambda execution role and policy setting
+    - [x] Lambda function and configuration
 - [ ] SQS consumer lambda (processBatchEmailEvent)
   - [ ] Test cases
   - [ ] Logic implementation
