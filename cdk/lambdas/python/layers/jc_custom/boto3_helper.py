@@ -322,9 +322,11 @@ def send_ses_email(
         logger.debug(f"successfully sent all emails")
 
     except ClientError as e:
-        logger.exception(f"Unexpected Boto3 client error: {e}")
+        logger.debug(f"Unexpected Boto3 client error: {e}")
+        raise
     except boto3.exceptions.Boto3Error as e:
-        logger.error(f"Boto3 error at send_email_to_admin: {e}")
+        logger.debug(f"Boto3 error at send_email_to_admin: {e}")
+        raise
 
 
 aws_client = AWSClients()
