@@ -5,10 +5,24 @@ import io
 import os
 import re
 import urllib.parse
+import random
+import time
 from http import HTTPStatus
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional, KeysView, TypedDict, Tuple
+from typing import (
+    Dict,
+    List,
+    Any,
+    Optional,
+    KeysView,
+    TypedDict,
+    Tuple,
+    Callable,
+    TypeVar,
+    ParamSpec,
+)
 from aws_lambda_powertools.utilities.data_classes import S3Event, SQSEvent
+from botocore.exceptions import ClientError
 
 
 logger = logging.getLogger(__name__)
@@ -63,7 +77,7 @@ def autofill_email_template(template: str, replacement_mapping: Dict[str, str]) 
 
         return template
     except Exception as e:
-        logger.exception(f"Error generating template: {e}")
+        logger.debug(f"Error generating template: {e}")
         raise
 
 
@@ -121,7 +135,7 @@ def filter_s3_targets(
                     }
                 )
         except Exception as e:
-            logger.exception(f"Error filtering s3 target. Skipping record - {record}")
+            logger.debug(f"Error filtering s3 target. Skipping record - {record}")
 
     return res
 
@@ -147,7 +161,7 @@ def filter_sqs_event(sqs_event: SQSEvent) -> List[SQSMessageTarget]:
                 }
             )
         except Exception as e:
-            logger.exception(f"Error filtering sqs event. Skipping record - {record}")
+            logger.debug(f"Error filtering sqs event. Skipping record - {record}")
 
     return res
 
@@ -175,7 +189,7 @@ def generate_csv(
         output.close()
 
     except Exception as e:
-        logger.error(f"Error generating csv: {e}")
+        logger.debug(f"Error generating csv: {e}")
         csv_content = "Error generating csv - please seek admin for help"
     finally:
         return csv_content
@@ -193,5 +207,58 @@ def generate_handler_response(
         }
         return response
     except TypeError as e:
-        logger.exception(f"Type error at generate_handler_response: {e}")
+        logger.debug(f"Type error at generate_handler_response: {e}")
         raise
+
+
+GenericCallbackFnResType = TypeVar("GenericCallbackFnResType")
+GenericCallbackFnArgsType = ParamSpec("GenericCallbackFnArgsType")
+
+
+def exponential_backoff(
+    fn: Callable[GenericCallbackFnArgsType, GenericCallbackFnResType],
+    *args: GenericCallbackFnArgsType.args,
+    **kwargs: Dict[str, Any],
+) -> GenericCallbackFnResType:
+    """
+    Generic exponential backoff helper intended for retry of fn it's provided.
+
+    Parameters:
+        fn (Callable): The function to execute with retry logic.
+        fn_args (Dict[Any]): arguments of fn being called.
+        max_retries (int): Max retry attempts (default: 3).
+        base_delay (float): Initial delay in seconds (default: 1.0).
+        exception_types (tuple): Exception types to catch (default: Exception).
+
+    Returns:
+        The return value of `fn` if successful.
+        Raises the last caught exception if all retries fail.
+    """
+    max_retries: int = kwargs.pop("max_retries", 3)
+    base_delay: float = kwargs.pop("base_delay", 1.0)
+    exception_types: Tuple[Exception] = kwargs.pop("exception_types", (Exception,))
+
+    for attempt in range(max_retries):
+        try:
+            response = fn(*args, **kwargs)
+
+            logger.debug(f"{fn.__name__} called successfully!")
+
+            return response
+        except exception_types as e:
+            if e.response["Error"]["Code"] == "LimitExceededException":
+                raise
+
+            logger.debug(f"Attempt {attempt + 1} of {max_retries} failed: {e}")
+
+            if attempt < max_retries:
+                wait = random.uniform(0, base_delay * (2**attempt))  # random for jitter
+
+                logger.debug(f"retrying after {wait}s...")
+
+                time.sleep(wait)
+            else:
+                logger.debug(
+                    f"Maximum retry reached - {fn.__name__} function failed..."
+                )
+                raise
