@@ -40,7 +40,7 @@ export class CdkStack extends cdk.Stack {
     const awsRegion = stack.region;
     const accountId = stack.account;
 
-    // DDB Table:
+    // DDB Tables:
     const TemplateMetadataTable = new ddb.TableV2(
       stack,
       "TemplateMetadataTable",
@@ -110,7 +110,6 @@ export class CdkStack extends cdk.Stack {
     });
 
     // IAM:
-    //// sendBatchEmailEvent Lambda Execution Roles:
     const sendBatchEmailEventRole = new iam.Role(
       stack,
       "SendBatchEmailEventRole",
@@ -120,22 +119,18 @@ export class CdkStack extends cdk.Stack {
     );
     const sendBatchEmailEventRolePolicies = [
       {
-        // S3 policy
         actions: ["s3:GetObject", "s3:DeleteObject", "s3:PutObject"],
         resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
       },
       {
-        // SES policy
         actions: ["ses:SendRawEmail"],
         resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
       },
       {
-        // DDB policy
         actions: ["dynamodb:GetItem"],
         resources: [TemplateMetadataTable.tableArn],
       },
       {
-        // DDB policy
         actions: ["dynamodb:PutItem"],
         resources: [EmailBatchTrackerTable.tableArn],
       },
@@ -145,7 +140,6 @@ export class CdkStack extends cdk.Stack {
       sendBatchEmailEventRole
     );
 
-    //// ProcessSESTemplate Lambda Execution Roles:
     const processSesTemplateRole = new iam.Role(
       stack,
       "ProcessSesTemplateRole",
@@ -155,17 +149,14 @@ export class CdkStack extends cdk.Stack {
     );
     const processSesTemplateRolePolicies = [
       {
-        // S3 Policy
         actions: ["s3:GetObject", "s3:PutObject"],
         resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
       },
       {
-        // SES Policy
         actions: ["ses:SendRawEmail"],
         resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
       },
       {
-        // DynamoDB Policy
         actions: ["dynamodb:PutItem", "dynamodb:GetItem"],
         resources: [TemplateMetadataTable.tableArn],
       },
@@ -185,17 +176,14 @@ export class CdkStack extends cdk.Stack {
     );
     const processBatchEmailEventRolePolicies = [
       {
-        // S3 Policy
         actions: ["s3:GetObject"],
         resources: [`${jcBatchEmailServiceBucket.bucketArn}/*`],
       },
       {
-        // SES Policy
         actions: ["ses:SendRawEmail"],
         resources: [process.env.SES_IDENTITY_DOMAIN_ARN!],
       },
       {
-        // DynamoDB Policy
         actions: ["dynamodb:UpdateItem"],
         resources: [EmailBatchTrackerTable.tableArn],
       },
@@ -205,7 +193,6 @@ export class CdkStack extends cdk.Stack {
       processBatchEmailEventRole
     );
 
-    //// scheduleBatchEmail Lambda Execution Roles:
     const scheduleBatchEmailRole = new iam.Role(
       stack,
       "ScheduleBatchEmailRole",
@@ -340,7 +327,7 @@ export class CdkStack extends cdk.Stack {
     emailBatchQueue.grantSendMessages(sendBatchEmailEvent);
     emailBatchQueue.grantConsumeMessages(processBatchEmailEvent);
 
-    // S3 Event Notification Configuration
+    // S3 Event Notification Configurations
     const eventNotificationConfigurations: EventNotificationConfiguration[] = [
       {
         eventType: s3.EventType.OBJECT_CREATED,
@@ -390,9 +377,9 @@ function addPolicyToLambdaRole(
   policies: Array<cdk.aws_iam.PolicyStatementProps>,
   role: cdk.aws_iam.Role
 ) {
-  //// AWS managed basic lambda execution role
   role.addManagedPolicy(
     iam.ManagedPolicy.fromAwsManagedPolicyName(
+      //// AWS managed basic lambda execution role
       "service-role/AWSLambdaBasicExecutionRole"
     )
   );
