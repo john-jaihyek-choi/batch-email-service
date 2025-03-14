@@ -1,8 +1,8 @@
 .DS_Store
 .pytest_cache
 .vscode/
-!vscode/settings.json  # ✅ Share workspace settings (formatter, linting rules)
-!vscode/extensions.json  # ✅ Recommended VS Code extensions
+!vscode/settings.json
+!vscode/extensions.json
 node_modules
 .venv
 .env
