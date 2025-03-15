@@ -6,7 +6,7 @@ import boto3.exceptions
 import threading
 from functools import lru_cache
 from botocore.exceptions import ClientError
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 from typing import Dict, Any, List, Literal, Optional, Mapping
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -256,7 +256,7 @@ def send_ses_email(
     send_to: str,
     subject: str,
     body: str,
-    attachments: Optional[OrderedDict[str, str]] = {},
+    attachments: Optional[Dict[str, str]] = {},
     body_type: Literal["html", "plain"] = "plain",
     aws_region: Optional[str] = aws_default_region,
 ) -> None:

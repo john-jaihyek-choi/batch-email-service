@@ -3,7 +3,6 @@ import json
 import logging
 from typing import Dict, Any, List, Literal
 from http import HTTPStatus
-from collections import OrderedDict
 
 # external libraries
 from mypy_boto3_s3.type_defs import CopySourceTypeDef
@@ -76,7 +75,7 @@ def process_s3_targets(
 def handle_target_errors(
     target_errors: List[Dict[str, Any]], successful_recipients_count: int
 ) -> GenerateHandlerResponseReturnType:
-    attachments: OrderedDict[str, str] = OrderedDict()
+    attachments: Dict[str, str] = {}
     fields: Dict[str, str] = target_errors[0].get("Errors", [])[0]
     headers = fields.keys()
 

@@ -5,7 +5,6 @@ import io
 import re
 import time
 from functools import lru_cache
-from collections import OrderedDict
 from typing import Dict, List, Any, Literal, Optional, cast, IO
 
 # external libraries
@@ -28,17 +27,15 @@ logger.setLevel(config.LOG_LEVEL)
 
 
 def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in place
-    batch: List[OrderedDict[str, Any]] = []
-    row_errors: List[OrderedDict[str, Any]] = []
+    batch: List[Dict[str, Any]] = []
+    row_errors: List[Dict[str, Any]] = []
 
     csv_reader = csv.DictReader(file_obj)
     if csv_reader.fieldnames is None:
         row_errors.append(
-            OrderedDict(
-                {
-                    "Error": "No headers found",
-                }
-            )
+            {
+                "Error": "No headers found",
+            }
         )
         yield batch, row_errors
 
@@ -48,7 +45,7 @@ def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in
 
         try:
             custom_fields = {"row_number": row_number}
-            row_info = OrderedDict({**custom_fields, **row})
+            row_info = {**custom_fields, **row}
 
             basic_fields, template_fields = validate_basic_fields(
                 row, config.EMAIL_REQUIRED_FIELDS
@@ -59,13 +56,11 @@ def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in
             ):  # basic or template specific fields missing
                 message = f"Missing {"basic" if basic_fields else ""}{" & " if basic_fields and template_fields else ""}{"template specific" if template_fields else ""} required fields"
                 row_errors.append(
-                    OrderedDict(
-                        {
-                            **row_info,
-                            "Error": message,
-                            "MissingFields": basic_fields + template_fields,
-                        }
-                    )
+                    {
+                        **row_info,
+                        "Error": message,
+                        "MissingFields": basic_fields + template_fields,
+                    }
                 )
             else:  # no missing fields
                 batch.append(row_info)
@@ -73,13 +68,9 @@ def batch_read_csv(file_obj, batch_size: int):  # reads a CSV file in batches in
             response = cast(Dict[str, Any], e.response)
 
             if response["Error"]["Code"] == "ResourceNotFoundException":
-                row_errors.append(
-                    OrderedDict({**row_info, "Error": f"Template does not exist {e}"})
-                )
+                row_errors.append({**row_info, "Error": f"Template does not exist {e}"})
         except Exception as e:
-            row_errors.append(
-                OrderedDict({**row_info, "Error": f"Unidentified error {e}"})
-            )
+            row_errors.append({**row_info, "Error": f"Unidentified error {e}"})
 
         if len(batch) == batch_size:
             yield batch, []
@@ -262,7 +253,7 @@ def process_batch(s3_target: S3Target) -> Dict[str, Any]:
                     "total_batch": {"N": str(batch_sent)},
                     "batch_processed": {"N": "0"},
                     "batch_details": {"M": {"failed": {"L": []}, "success": {"L": []}}},
-                    "expirationTime": {"N": str(ttl_stamp)},
+                    "expiration_time": {"N": str(ttl_stamp)},
                 },
             )
 
